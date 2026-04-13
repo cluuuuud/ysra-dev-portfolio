@@ -1,16 +1,30 @@
-# attendance_app
+# Student Attendance System (Bachelor's Graduation Project)
+**Final Year Project - Computer Science Department**
 
-A new Flutter project.
+## 👨‍🏫 Academic Supervision & Research Team
+- **Supervisor:** Mr. Ghemougui Abdessettar
+- **Developed by:**
+  - Yousra Bouslah
+  - Yasmine Halib
+  - Maria Ines Boudjoudi
+- **Institution:** University of M’sila (Department of Computer Science)
 
-## Getting Started
+## 📂 Project Structure
+A modular architecture focusing on UI/UX excellence:
+- `main.dart`: Core entry point.
+- `login_screen.dart`: Authentication interface with premium aesthetics.
+- `dashboard_screen.dart`: Centralized management system.
+- `student_screen.dart`: Student record visualization.
+- `add_student_screen.dart`: Enrollment & data entry module.
+- `attendance_record_screen.dart`: Dedicated attendance tracking layer.
 
-This project is a starting point for a Flutter application.
+## ✨ Technical Highlights
+- **Design Philosophy:** Implemented a "Global Tech Aesthetic" using Glassmorphism.
+- **Visual Identity:** High-fidelity dark mode (Obsidian palette) for professional usage.
+- **Frontend Architecture:** Built using Flutter, ensuring a seamless cross-platform experience.
 
-A few resources to get you started if this is your first Flutter project:
+## 🛠 Project Status
+- **Current Phase:** UI/UX Prototype & Frontend Implementation.
+- **Tech Stack:** Flutter, Dart, Git.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+*Submitted as part of the requirements for the Bachelor's Degree in Computer Science.*
