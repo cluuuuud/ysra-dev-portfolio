@@ -1,6 +1,6 @@
-import 'student_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'student_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   @override
@@ -73,10 +73,7 @@ class DashboardScreen extends StatelessWidget {
             // 🔥 Buttons
             ElevatedButton(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => StudentsListScreen()),
-                );
+                Navigator.pushNamed(context, '/students');
               },
               child: Text("Students"),
               style: ElevatedButton.styleFrom(
@@ -87,7 +84,11 @@ class DashboardScreen extends StatelessWidget {
             SizedBox(height: 15),
 
             ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Classes screen not added yet")),
+                );
+              },
               child: Text("Classes"),
               style: ElevatedButton.styleFrom(
                 minimumSize: Size(double.infinity, 50),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 // 🔥 استدعاء الشاشات
-import 'Login_screen.dart';
+import 'login_screen.dart';
 import 'dashboard_screen.dart';
 import 'student_screen.dart';
 import 'attendance_record_screen.dart';

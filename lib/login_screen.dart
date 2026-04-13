@@ -99,12 +99,7 @@ class LoginScreen extends StatelessWidget {
                     ),
                     child: ElevatedButton(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => DashboardScreen(),
-                          ),
-                        );
+                        Navigator.pushNamed(context, '/dashboard');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
