@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'student_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
+  const DashboardScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF1A1A2E),
+      backgroundColor: const Color(0xFF1A1A2E),
 
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -15,17 +16,6 @@ class DashboardScreen extends StatelessWidget {
           "Dashboard",
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
-        actions: [
-          IconButton(icon: Icon(Icons.notifications_none), onPressed: () {}),
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.blueAccent,
-              child: Icon(Icons.person, color: Colors.white),
-            ),
-          ),
-        ],
       ),
 
       body: Padding(
@@ -33,6 +23,7 @@ class DashboardScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 👋 Welcome
             Text(
               "Welcome 👋",
               style: GoogleFonts.poppins(color: Colors.white70, fontSize: 16),
@@ -46,19 +37,22 @@ class DashboardScreen extends StatelessWidget {
               ),
             ),
 
-            SizedBox(height: 30),
+            const SizedBox(height: 30),
 
-            // 🔥 Stats
+            // 🔥 Stats فقط
             Row(
               children: [
                 _buildStatCard("Students", "120", Colors.blueAccent),
-                SizedBox(width: 15),
+                const SizedBox(width: 15),
                 _buildStatCard("Classes", "4", Colors.cyan),
+                const SizedBox(width: 15),
+                _buildStatCard("Sessions", "12", Colors.orange),
               ],
             ),
 
-            SizedBox(height: 30),
+            const SizedBox(height: 40),
 
+            // 🔥 Quick Action (غير Classes)
             Text(
               "Quick Actions",
               style: GoogleFonts.poppins(
@@ -68,31 +62,16 @@ class DashboardScreen extends StatelessWidget {
               ),
             ),
 
-            SizedBox(height: 20),
-
-            // 🔥 Buttons
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushNamed(context, '/students');
-              },
-              child: Text("Students"),
-              style: ElevatedButton.styleFrom(
-                minimumSize: Size(double.infinity, 50),
-              ),
-            ),
-
-            SizedBox(height: 15),
+            const SizedBox(height: 20),
 
             ElevatedButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Classes screen not added yet")),
-                );
+                Navigator.pushNamed(context, '/classes');
               },
-              child: Text("Classes"),
               style: ElevatedButton.styleFrom(
-                minimumSize: Size(double.infinity, 50),
+                minimumSize: const Size(double.infinity, 55),
               ),
+              child: const Text("Classes"),
             ),
           ],
         ),
@@ -104,7 +83,7 @@ class DashboardScreen extends StatelessWidget {
   Widget _buildStatCard(String title, String value, Color color) {
     return Expanded(
       child: Container(
-        padding: EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.05),
           borderRadius: BorderRadius.circular(20),
@@ -116,7 +95,7 @@ class DashboardScreen extends StatelessWidget {
               title,
               style: GoogleFonts.poppins(color: Colors.white60, fontSize: 12),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             Text(
               value,
               style: GoogleFonts.poppins(

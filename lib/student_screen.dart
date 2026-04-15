@@ -4,9 +4,9 @@ import 'attendance_record_screen.dart';
 
 class StudentsScreen extends StatelessWidget {
   final List<Map<String, String>> students = [
-    {"name": "Yousra", "id": "2021001", "status": "Excellent"},
+    {"name": "Boudjoudi Maria Inas", "id": "2021001", "status": "Excellent"},
     {"name": "Yasmine Halib", "id": "2021002", "status": "Good"},
-    {"name": "Sheima", "id": "2021003", "status": "Average"},
+    {"name": "Bouslah Yousra", "id": "2021003", "status": "Average"},
   ];
 
   @override
