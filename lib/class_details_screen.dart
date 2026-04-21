@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'student_screen.dart';
 
 class ClassDetailsScreen extends StatelessWidget {
   final String className;
@@ -22,7 +23,12 @@ class ClassDetailsScreen extends StatelessWidget {
         child: Column(
           children: [
             _buildButton(context, "Students", Icons.people, () {
-              Navigator.pushNamed(context, '/students');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => StudentsScreen(className: className),
+                ),
+              );
             }),
 
             const SizedBox(height: 20),

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -16,72 +17,130 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
   double discipline = 5.0;
   double preparation = 4.0;
 
+  static const Color primaryBg = Color(0xFF080808);
+  static const Color accentBlue = Color(0xFF4D96FF);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
-
+      backgroundColor: primaryBg,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
-          "Record Activity",
-          style: GoogleFonts.poppins(color: Colors.white),
-        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
+        title: Text(
+          "RECORD ACTIVITY",
+          style: GoogleFonts.lexend(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
-
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(25),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStudentHeader(),
-            const SizedBox(height: 40),
-
-            Text("Attendance Status", style: _sectionStyle()),
-            const SizedBox(height: 15),
-
-            Row(
-              children: [
-                _statusButton("Present", Colors.green, Icons.check_circle),
-                const SizedBox(width: 8),
-                _statusButton("Late", Colors.orange, Icons.access_time_filled),
-                const SizedBox(width: 8),
-                _statusButton("Absent", Colors.red, Icons.cancel),
-              ],
+      body: Stack(
+        children: [
+          /// ✅ تم حذف blurRadius (كان الخطأ هنا)
+          Positioned(
+            top: 50,
+            left: 20,
+            child: Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: accentBlue.withOpacity(0.1),
+              ),
             ),
+          ),
 
-            const SizedBox(height: 40),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildStudentHeader(),
+                  const SizedBox(height: 40),
 
-            Text("Activity Metrics (0 - 5)", style: _sectionStyle()),
-            const SizedBox(height: 20),
+                  _buildSectionTitle("Attendance Status"),
+                  const SizedBox(height: 15),
 
-            _buildScoreSlider(
-              "Participation",
-              participation,
-              (val) => setState(() => participation = val),
+                  Row(
+                    children: [
+                      _statusButton(
+                        "Present",
+                        Colors.greenAccent,
+                        Icons.check_circle_rounded,
+                      ),
+                      const SizedBox(width: 10),
+                      _statusButton(
+                        "Late",
+                        Colors.orangeAccent,
+                        Icons.watch_later_rounded,
+                      ),
+                      const SizedBox(width: 10),
+                      _statusButton(
+                        "Absent",
+                        Colors.redAccent,
+                        Icons.remove_circle_rounded,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 40),
+
+                  _buildSectionTitle("Performance Metrics"),
+                  const SizedBox(height: 10),
+                  _buildGlassMetricsCard(),
+
+                  const SizedBox(height: 50),
+                  _buildSaveButton(),
+                ],
+              ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            _buildScoreSlider(
-              "Discipline",
-              discipline,
-              (val) => setState(() => discipline = val),
-            ),
-
-            _buildScoreSlider(
-              "Preparation",
-              preparation,
-              (val) => setState(() => preparation = val),
-            ),
-
-            const SizedBox(height: 50),
-
-            _buildSaveButton(),
-          ],
+  Widget _buildStudentHeader() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Row(
+            children: [
+              const CircleAvatar(
+                radius: 32,
+                backgroundColor: accentBlue,
+                child: Icon(Icons.person_rounded, color: Colors.white),
+              ),
+              const SizedBox(width: 18),
+              Text(
+                widget.studentName,
+                style: GoogleFonts.lexend(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -93,28 +152,26 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => attendanceStatus = status),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
             color: isSelected
-                ? color.withOpacity(0.2)
-                : Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
+                ? color.withOpacity(0.15)
+                : Colors.white.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isSelected ? color : Colors.white10,
-              width: isSelected ? 2 : 1,
+              color: isSelected ? color.withOpacity(0.5) : Colors.white10,
             ),
           ),
           child: Column(
             children: [
-              Icon(icon, color: isSelected ? color : Colors.white38, size: 22),
-              const SizedBox(height: 5),
+              Icon(icon, color: isSelected ? color : Colors.white24),
+              const SizedBox(height: 8),
               Text(
                 status,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.lexend(
                   color: isSelected ? color : Colors.white38,
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
             ],
@@ -124,33 +181,38 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
     );
   }
 
-  Widget _buildStudentHeader() {
-    return Row(
-      children: [
-        const CircleAvatar(
-          radius: 30,
-          backgroundColor: Colors.blueAccent,
-          child: Icon(Icons.person, color: Colors.white),
-        ),
-        const SizedBox(width: 15),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.studentName,
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const Text(
-              "Group: G1 • ID: 2121",
-              style: TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-          ],
-        ),
-      ],
+  Widget _buildGlassMetricsCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        children: [
+          _buildScoreSlider(
+            "Participation",
+            participation,
+            (v) => setState(() => participation = v),
+            Colors.greenAccent,
+          ),
+          const Divider(color: Colors.white10),
+          _buildScoreSlider(
+            "Discipline",
+            discipline,
+            (v) => setState(() => discipline = v),
+            Colors.orangeAccent,
+          ),
+          const Divider(color: Colors.white10),
+          _buildScoreSlider(
+            "Preparation",
+            preparation,
+            (v) => setState(() => preparation = v),
+            accentBlue,
+          ),
+        ],
+      ),
     );
   }
 
@@ -158,69 +220,73 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
     String label,
     double value,
     Function(double) onChanged,
+    Color color,
   ) {
     return Column(
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(color: Colors.white70)),
+            Text(label, style: GoogleFonts.lexend(color: Colors.white70)),
             Text(
-              value.toInt().toString(),
-              style: const TextStyle(
-                color: Colors.blueAccent,
+              "${value.toInt()}/5",
+              style: GoogleFonts.lexend(
+                color: color,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ],
         ),
-        Slider(
-          value: value,
-          min: 0,
-          max: 5,
-          divisions: 5,
-          activeColor: Colors.blueAccent,
-          inactiveColor: Colors.white10,
-          onChanged: onChanged,
+        SliderTheme(
+          data: SliderTheme.of(
+            context,
+          ).copyWith(activeTrackColor: color, thumbColor: color),
+          child: Slider(
+            value: value,
+            min: 0,
+            max: 5,
+            divisions: 5,
+            onChanged: onChanged,
+          ),
         ),
       ],
     );
   }
 
   Widget _buildSaveButton() {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: 55,
+      height: 60,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(colors: [accentBlue, Color(0xFF3366FF)]),
+      ),
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blueAccent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
         onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                "Saved: $attendanceStatus for ${widget.studentName}",
-              ),
-            ),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("Saved ✅")));
         },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+        ),
         child: Text(
           "CONFIRM & SAVE",
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: GoogleFonts.lexend(color: Colors.white),
         ),
       ),
     );
   }
 
-  TextStyle _sectionStyle() => GoogleFonts.poppins(
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: FontWeight.w600,
-  );
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: GoogleFonts.lexend(
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
 }

@@ -1,104 +1,131 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'class_details_screen.dart';
 
 class ClassesScreen extends StatelessWidget {
   const ClassesScreen({super.key});
 
-  final List<Map<String, String>> classes = const [
-    {"name": "Group G1", "time": "08:00 - 10:00", "room": "Room 101"},
-    {"name": "Group G2", "time": "10:00 - 12:00", "room": "Room 102"},
-    {"name": "Group G3", "time": "13:00 - 15:00", "room": "Room 103"},
-  ];
+  static const Color primaryBlue = Color(0xFF2A7BF1);
+  static const Color textMain = Color(0xFF1F2937);
+  static const Color textMuted = Color(0xFF6B7280);
+  static const Color cardBg = Color(0xFFF3F4F6);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: Colors.white,
 
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
-        title: Text("Classes", style: GoogleFonts.poppins(color: Colors.white)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: textMain),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          "Classes",
+          style: GoogleFonts.lexend(
+            color: textMain,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add, color: primaryBlue),
+            onPressed: () {
+              // ➕ Add Class (نخدموها من بعد)
+            },
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
 
-      body: ListView.builder(
-        itemCount: classes.length,
-        itemBuilder: (context, index) {
-          return _buildClassItem(context, classes[index]);
-        },
-      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            /// 🔍 Search
+            Container(
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: "Search classes...",
+                  hintStyle: GoogleFonts.lexend(color: textMuted),
+                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.all(16),
+                ),
+              ),
+            ),
 
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.blueAccent,
-        child: const Icon(Icons.add),
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Add Class coming soon")),
-          );
-        },
+            const SizedBox(height: 20),
+
+            /// 📚 Grid Classes
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 15,
+                mainAxisSpacing: 15,
+                childAspectRatio: 1.1,
+                children: [
+                  _classCard(context, "L3-SI-G1", "Algorithms", 28),
+                  _classCard(context, "L3-SI-G2", "Algorithms", 25),
+                  _classCard(context, "M1-ISIL-G1", "Software Eng", 22),
+                  _classCard(context, "L2-INFO-G3", "OS", 30),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // 🔥 Class Item مع Navigation
-  Widget _buildClassItem(BuildContext context, Map<String, String> classe) {
-    return GestureDetector(
+  /// 📦 Class Card
+  Widget _classCard(
+    BuildContext context,
+    String title,
+    String subject,
+    int count,
+  ) {
+    return InkWell(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                ClassDetailsScreen(className: classe['name']!),
-          ),
-        );
+        Navigator.pushNamed(context, '/attendance');
       },
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        padding: const EdgeInsets.all(15),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.white10),
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              backgroundColor: Colors.blueAccent.withOpacity(0.2),
-              child: const Icon(Icons.class_, color: Colors.blueAccent),
-            ),
-
-            const SizedBox(width: 15),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    classe['name']!,
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    "Time: ${classe['time']}",
-                    style: const TextStyle(color: Colors.white38),
-                  ),
-                  Text(
-                    "Room: ${classe['room']}",
-                    style: const TextStyle(color: Colors.white38),
-                  ),
-                ],
+            Text(
+              title,
+              style: GoogleFonts.lexend(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
               ),
             ),
-
-            const Icon(
-              Icons.arrow_forward_ios,
-              color: Colors.white38,
-              size: 16,
+            const SizedBox(height: 6),
+            Text(
+              subject,
+              style: GoogleFonts.lexend(color: textMuted, fontSize: 12),
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                const Icon(Icons.people, size: 16, color: primaryBlue),
+                const SizedBox(width: 5),
+                Text(
+                  "$count students",
+                  style: GoogleFonts.lexend(fontSize: 12),
+                ),
+              ],
             ),
           ],
         ),

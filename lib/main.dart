@@ -1,42 +1,46 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-
-// 🔥 استدعاء الشاشات
+import 'onboarding_screen.dart';
 import 'login_screen.dart';
 import 'dashboard_screen.dart';
-import 'student_screen.dart';
 import 'class_screen.dart';
-import 'class_details_screen.dart';
-import 'timetable_screen.dart';
-import 'sessions_screen.dart';
-import 'attendance_record_screen.dart';
+import 'attendance_list_screen.dart';
+import 'profile_screen.dart';
+import 'session_history_screen.dart';
+import 'setting_screen.dart';
+import 'sessions_details_screen.dart';
+import 'Export_screen.dart';
 
 void main() {
-  runApp(const AttendanceApp());
+  runApp(const AttendixApp());
 }
 
-class AttendanceApp extends StatelessWidget {
-  const AttendanceApp({super.key});
+class AttendixApp extends StatelessWidget {
+  const AttendixApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Student Attendance System',
+      title: 'ATTENDIX',
 
-      theme: ThemeData(brightness: Brightness.dark),
+      theme: ThemeData(
+        scaffoldBackgroundColor: Colors.white,
+        fontFamily: 'Lexend',
+      ),
 
-      // 🟢 البداية
-      initialRoute: '/login',
+      initialRoute: '/',
 
-      // 🔥 هنا الربط الحقيقي
       routes: {
-        '/login': (context) => LoginScreen(),
-        '/dashboard': (context) => DashboardScreen(),
-        '/classes': (context) => ClassesScreen(),
-        '/students': (context) => StudentsScreen(),
-        '/timetable': (context) => TimetableScreen(),
-        '/attendance': (context) => AttendanceRecordScreen(studentName: "Test"),
+        '/': (context) => const OnboardingScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/dashboard': (context) => const DashboardScreen(),
+        '/classes': (context) => const ClassesScreen(),
+        '/attendance': (context) => const AttendanceListScreen(),
+        '/settings': (context) => SettingsScreen(),
+        '/profile': (context) => ProfileScreen(),
+        '/history': (context) => SessionHistoryScreen(),
+        '/session_details': (context) => SessionDetailsScreen(),
+        '/export': (context) => ExportScreen(),
       },
     );
   }

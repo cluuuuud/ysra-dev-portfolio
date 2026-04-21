@@ -10,11 +10,10 @@ class Session {
 }
 
 class TimetableScreen extends StatelessWidget {
-  const TimetableScreen({super.key});
+  TimetableScreen({super.key});
+  final List<String> days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
-  final List<String> days = const ["Mon", "Tue", "Wed", "Thu", "Fri"];
-
-  final List<String> times = const [
+  final List<String> times = [
     "08:00 - 09:30",
     "09:30 - 11:00",
     "11:00 - 12:30",
@@ -23,13 +22,17 @@ class TimetableScreen extends StatelessWidget {
     "16:00 - 17:30",
   ];
 
-  final List<Session> sessions = const [
+  final List<Session> sessions = [
     Session(day: "Mon", time: "08:00 - 09:30", subject: "Algorithms"),
     Session(day: "Mon", time: "09:30 - 11:00", subject: "Data Structures"),
     Session(day: "Tue", time: "08:00 - 09:30", subject: "Operating Systems"),
     Session(day: "Wed", time: "11:00 - 12:30", subject: "Databases"),
     Session(day: "Thu", time: "13:00 - 14:30", subject: "Networks"),
-    Session(day: "Fri", time: "14:30 - 16:00", subject: "AI"),
+    Session(
+      day: "Fri",
+      time: "14:30 - 16:00",
+      subject: "Artificial Intelligence",
+    ),
   ];
 
   Session? getSession(String day, String time) {
@@ -56,7 +59,7 @@ class TimetableScreen extends StatelessWidget {
 
       body: Column(
         children: [
-          // Header (days)
+          // Days Header
           Row(
             children: [
               const SizedBox(width: 80),
@@ -84,7 +87,7 @@ class TimetableScreen extends StatelessWidget {
 
                 return Row(
                   children: [
-                    // time column
+                    // Time column
                     SizedBox(
                       width: 80,
                       child: Text(
@@ -96,7 +99,7 @@ class TimetableScreen extends StatelessWidget {
                       ),
                     ),
 
-                    // cells
+                    // Cells
                     ...days.map((day) {
                       final session = getSession(day, time);
 
@@ -138,7 +141,7 @@ class TimetableScreen extends StatelessWidget {
     );
   }
 
-  // 🔥 Bottom Sheet (Attendance مباشرة)
+  // 🔥 Attendance Bottom Sheet
   void _openAttendance(BuildContext context, Session session) {
     showModalBottomSheet(
       context: context,
