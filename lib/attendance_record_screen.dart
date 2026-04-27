@@ -3,6 +3,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 enum Status { present, late, absent }
 
+// 📦 GLOBAL SESSIONS LIST
+List<Map<String, dynamic>> sessions = [];
+
+// 👤 STUDENT MODEL
 class Student {
   String name;
   String id;
@@ -21,7 +25,7 @@ class AttendanceRecordScreen extends StatefulWidget {
 }
 
 class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
-  // 🎨 MODERN COLORS
+  // 🎨 COLORS
   static const Color primary = Color(0xFF3B82F6);
   static const Color bg = Color(0xFFF9FAFB);
   static const Color cardBg = Colors.white;
@@ -41,7 +45,7 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
     Student(name: "Mohamed", id: "2024IT1004"),
   ];
 
-  // 🔁 Toggle status
+  // 🔁 CHANGE STATUS
   void toggleStatus(int index) {
     setState(() {
       students[index].status = nextStatus(students[index].status);
@@ -59,7 +63,7 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
     }
   }
 
-  // 📊 Stats
+  // 📊 COUNT
   int count(Status s) => students.where((e) => e.status == s).length;
 
   Color getColor(Status status) {
@@ -120,7 +124,7 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 📊 STATS CARD
+            // 📊 STATS
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -159,12 +163,6 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => markAll(Status.present),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                     child: const Text("All Present"),
                   ),
                 ),
@@ -172,13 +170,6 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => markAll(Status.absent),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: absentColor,
-                      side: const BorderSide(color: border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                     child: const Text("All Absent"),
                   ),
                 ),
@@ -187,7 +178,7 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
 
             const SizedBox(height: 20),
 
-            // 👥 STUDENTS LIST
+            // 👥 LIST
             Expanded(
               child: ListView.builder(
                 itemCount: students.length,
@@ -214,21 +205,18 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
                                   s.name,
                                   style: GoogleFonts.lexend(
                                     fontWeight: FontWeight.w600,
-                                    color: textMain,
                                   ),
                                 ),
                                 Text(
                                   s.id,
-                                  style: GoogleFonts.lexend(
+                                  style: const TextStyle(
                                     fontSize: 12,
-                                    color: textMuted,
+                                    color: Colors.grey,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-
-                          // 🔘 STATUS CHIP
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
@@ -254,18 +242,34 @@ class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
               ),
             ),
 
+            // 🔘 HISTORY BUTTON
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, '/history');
+                },
+                child: const Text("View History"),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
             // 💾 SAVE BUTTON
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
                 onPressed: () {
+                  sessions.add({
+                    "className": widget.className,
+                    "date": DateTime.now().toString(),
+                    "present": present,
+                    "late": late,
+                    "absent": absent,
+                  });
+
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Session Saved ✅")),
                   );

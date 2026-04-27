@@ -50,7 +50,7 @@ class DashboardScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 👤 HEADER (Notion style clickable)
+              // 👤 HEADER
               InkWell(
                 onTap: () {
                   Navigator.pushNamed(context, '/profile');
@@ -131,6 +131,7 @@ class DashboardScreen extends StatelessWidget {
 
               const SizedBox(height: 14),
 
+              // ✅ Attendance
               _actionButton("Take Attendance", Icons.edit, () {
                 Navigator.push(
                   context,
@@ -142,17 +143,33 @@ class DashboardScreen extends StatelessWidget {
 
               const SizedBox(height: 10),
 
+              // ✅ Classes
               _actionButton("Manage Classes", Icons.folder_open, () {
                 Navigator.pushNamed(context, '/classes');
               }),
 
               const SizedBox(height: 10),
 
-              _actionButton(
-                "Export to Drive",
-                Icons.cloud_upload_outlined,
-                () {},
-              ),
+              // ✅ Timetable 🔥
+              _actionButton("Timetable", Icons.schedule, () {
+                Navigator.pushNamed(context, '/timetable');
+              }),
+
+              const SizedBox(height: 10),
+
+              // ✅ History 🔥
+              _actionButton("Sessions History", Icons.history, () {
+                Navigator.pushNamed(context, '/history');
+              }),
+
+              const SizedBox(height: 10),
+
+              // ✅ Export
+              _actionButton("Export to Drive", Icons.cloud_upload_outlined, () {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text("Exported ✅")));
+              }),
             ],
           ),
         ),

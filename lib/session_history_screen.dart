@@ -1,85 +1,106 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'attendance_record_screen.dart';
 
-class SessionHistoryScreen extends StatelessWidget {
-  const SessionHistoryScreen({super.key});
+class SessionsHistoryScreen extends StatelessWidget {
+  const SessionsHistoryScreen({super.key});
 
-  static const Color bg = Color(0xFFF8FAFC);
+  // 🎨 COLORS
+  static const Color bg = Color(0xFFF9FAFB);
   static const Color cardBg = Colors.white;
-  static const Color border = Color(0xFFE2E8F0);
-  static const Color textMain = Color(0xFF0F172A);
-  static const Color textMuted = Color(0xFF64748B);
+  static const Color border = Color(0xFFE5E7EB);
+
+  static const Color textMain = Color(0xFF111827);
+  static const Color textMuted = Color(0xFF6B7280);
+
+  static const Color presentColor = Color(0xFF10B981);
+  static const Color lateColor = Color(0xFFF59E0B);
+  static const Color absentColor = Color(0xFFEF4444);
 
   @override
   Widget build(BuildContext context) {
-    final sessions = [
-      {"class": "L3-SI-G1", "date": "2026-04-20", "p": 25, "a": 5},
-      {"class": "M1-ISIL", "date": "2026-04-18", "p": 20, "a": 3},
-    ];
-
     return Scaffold(
       backgroundColor: bg,
+
       appBar: AppBar(
         backgroundColor: bg,
         elevation: 0,
+        iconTheme: const IconThemeData(color: textMain),
         title: Text(
-          "Session History",
+          "Sessions History",
           style: GoogleFonts.lexend(
             color: textMain,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: sessions.length,
-        itemBuilder: (context, i) {
-          final s = sessions[i];
 
-          return GestureDetector(
-            onTap: () {
-              Navigator.pushNamed(context, '/session_details', arguments: s);
-            },
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 12),
+      body: sessions.isEmpty
+          ? const Center(child: Text("No sessions yet 😴"))
+          : ListView.builder(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: border),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          s["class"].toString(),
-                          style: GoogleFonts.lexend(
-                            fontWeight: FontWeight.w600,
-                            color: textMain,
-                          ),
-                        ),
-                        Text(
-                          s["date"].toString(),
-                          style: GoogleFonts.lexend(
-                            color: textMuted,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
+              itemCount: sessions.length,
+              itemBuilder: (context, index) {
+                final s = sessions[index];
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: border),
                   ),
-                  Text(
-                    "P:${s["p"]}  A:${s["a"]}",
-                    style: GoogleFonts.lexend(color: textMuted),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        s["className"],
+                        style: GoogleFonts.lexend(
+                          fontWeight: FontWeight.bold,
+                          color: textMain,
+                          fontSize: 16,
+                        ),
+                      ),
+
+                      const SizedBox(height: 5),
+
+                      Text(
+                        s["date"],
+                        style: GoogleFonts.lexend(
+                          fontSize: 12,
+                          color: textMuted,
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _chip("Present", s["present"], presentColor),
+                          _chip("Late", s["late"], lateColor),
+                          _chip("Absent", s["absent"], absentColor),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
-          );
-        },
+    );
+  }
+
+  Widget _chip(String label, int value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        "$label: $value",
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
       ),
     );
   }
