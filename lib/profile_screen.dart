@@ -63,7 +63,7 @@ class ProfileScreen extends StatelessWidget {
 
                   // Name
                   Text(
-                    "Dr. Yousra Bouslah",
+                    "Dr. Ghemougui Abdessettar",
                     style: GoogleFonts.lexend(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -75,7 +75,7 @@ class ProfileScreen extends StatelessWidget {
 
                   // Email
                   Text(
-                    "yousra@univ.edu",
+                    "GhemouguiAbdessettar@univ.edu",
                     style: GoogleFonts.lexend(fontSize: 13, color: textMuted),
                   ),
                 ],
