@@ -1,37 +1,70 @@
 import 'package:flutter/material.dart';
-
-class ClassModel {
-  String name;
-  int studentsCount;
-
-  ClassModel({required this.name, required this.studentsCount});
-}
+import 'package:google_fonts/google_fonts.dart';
+import 'database/db_helper.dart';
+import 'student_screen.dart';
+import 'attendance_record_screen.dart';
 
 class ClassListScreen extends StatefulWidget {
+  const ClassListScreen({super.key});
+
+  static const Color bg = Color(0xFFF8FAFC);
+  static const Color cardBg = Colors.white;
+  static const Color border = Color(0xFFE5E7EB);
+  static const Color primary = Color(0xFF3B82F6);
+  static const Color textMain = Color(0xFF111827);
+  static const Color textMuted = Color(0xFF6B7280);
+
   @override
   State<ClassListScreen> createState() => _ClassListScreenState();
 }
 
 class _ClassListScreenState extends State<ClassListScreen> {
-  List<ClassModel> classes = [
-    ClassModel(name: "L3-SI-G1", studentsCount: 32),
-    ClassModel(name: "L3-SI-G2", studentsCount: 28),
-  ];
+  List classes = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadClasses();
+  }
+
+  Future<void> loadClasses() async {
+    try {
+      final data = await DBHelper.getClasses();
+
+      setState(() {
+        classes = data;
+        loading = false;
+      });
+    } catch (e) {
+      setState(() => loading = false);
+      print(e);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (classes.isEmpty) {
+      return const Scaffold(body: Center(child: Text("No classes found")));
+    }
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: ClassListScreen.bg,
 
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: ClassListScreen.bg,
         elevation: 0,
-        title: const Text("Classes", style: TextStyle(color: Colors.black)),
-      ),
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openAddClass,
-        child: const Icon(Icons.add),
+        title: Text(
+          "Classes",
+          style: GoogleFonts.lexend(
+            color: ClassListScreen.textMain,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
 
       body: ListView.builder(
@@ -44,19 +77,22 @@ class _ClassListScreenState extends State<ClassListScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: ClassListScreen.cardBg,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: ClassListScreen.border),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    color: ClassListScreen.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.class_, color: Colors.blue),
+                  child: const Icon(
+                    Icons.class_,
+                    color: ClassListScreen.primary,
+                  ),
                 ),
 
                 const SizedBox(width: 12),
@@ -66,25 +102,59 @@ class _ClassListScreenState extends State<ClassListScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        c.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                        c["class_name"],
+                        style: GoogleFonts.lexend(
+                          fontWeight: FontWeight.w600,
+                          color: ClassListScreen.textMain,
                         ),
                       ),
                       Text(
-                        "${c.studentsCount} students",
-                        style: const TextStyle(color: Colors.grey),
+                        "ID: ${c["class_id"]}",
+                        style: GoogleFonts.lexend(
+                          fontSize: 12,
+                          color: ClassListScreen.textMuted,
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                // ➡️ دخول للطلبة
-                IconButton(
-                  icon: const Icon(Icons.arrow_forward_ios),
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/students');
+                // 👇 ACTIONS
+                PopupMenuButton(
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: "students",
+                      child: Text("Students"),
+                    ),
+                    const PopupMenuItem(
+                      value: "attendance",
+                      child: Text("Attendance"),
+                    ),
+                  ],
+                  onSelected: (value) {
+                    if (value == "students") {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StudentsScreen(
+                            classId: c["class_id"],
+                            className: c["class_name"],
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (value == "attendance") {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AttendanceRecordScreen(
+                            classId: c["class_id"],
+                            className: c["class_name"],
+                          ),
+                        ),
+                      );
+                    }
                   },
                 ),
               ],
@@ -92,11 +162,20 @@ class _ClassListScreenState extends State<ClassListScreen> {
           );
         },
       ),
+
+      // ➕ ADD CLASS
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: ClassListScreen.primary,
+        onPressed: _addClass,
+        child: const Icon(Icons.add),
+      ),
     );
   }
 
-  // ➕ Add Class
-  void _openAddClass() {
+  // =========================
+  // ➕ ADD CLASS
+  // =========================
+  void _addClass() {
     final controller = TextEditingController();
 
     showModalBottomSheet(
@@ -113,9 +192,12 @@ class _ClassListScreenState extends State<ClassListScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 "Add Class",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: GoogleFonts.lexend(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
 
               const SizedBox(height: 16),
@@ -128,14 +210,13 @@ class _ClassListScreenState extends State<ClassListScreen> {
               const SizedBox(height: 20),
 
               ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    classes.add(
-                      ClassModel(name: controller.text, studentsCount: 0),
-                    );
-                  });
+                onPressed: () async {
+                  if (controller.text.isEmpty) return;
+
+                  await DBHelper.insertClass(controller.text);
 
                   Navigator.pop(context);
+                  loadClasses();
                 },
                 child: const Text("Save"),
               ),

@@ -1,301 +1,328 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'database/db_helper.dart';
 
-enum Status { present, late, absent }
+class AppColors {
+  static const bg = Color(0xFFF7F8FA);
+  static const card = Colors.white;
 
-// 📦 GLOBAL SESSIONS LIST
-List<Map<String, dynamic>> sessions = [];
+  static const primary = Color(0xFF6366F1);
+  static const primaryLight = Color(0xFFE0E7FF);
 
-// 👤 STUDENT MODEL
-class Student {
-  String name;
-  String id;
-  Status status;
+  static const success = Color(0xFF22C55E);
+  static const warning = Color(0xFFF59E0B);
+  static const danger = Color(0xFFEF4444);
 
-  Student({required this.name, required this.id, this.status = Status.present});
+  static const textMain = Color(0xFF111827);
+  static const textMuted = Color(0xFF6B7280);
+  static const border = Color(0xFFE5E7EB);
 }
 
 class AttendanceRecordScreen extends StatefulWidget {
+  final int classId;
   final String className;
 
-  const AttendanceRecordScreen({super.key, required this.className});
+  const AttendanceRecordScreen({
+    super.key,
+    required this.classId,
+    required this.className,
+  });
 
   @override
   State<AttendanceRecordScreen> createState() => _AttendanceRecordScreenState();
 }
 
 class _AttendanceRecordScreenState extends State<AttendanceRecordScreen> {
-  // 🎨 COLORS
-  static const Color primary = Color(0xFF3B82F6);
-  static const Color bg = Color(0xFFF9FAFB);
-  static const Color cardBg = Colors.white;
-  static const Color border = Color(0xFFE5E7EB);
+  List<Map<String, dynamic>> students = [];
+  bool loading = true;
 
-  static const Color textMain = Color(0xFF111827);
-  static const Color textMuted = Color(0xFF6B7280);
+  @override
+  void initState() {
+    super.initState();
+    loadStudents();
+  }
 
-  static const Color presentColor = Color(0xFF10B981);
-  static const Color lateColor = Color(0xFFF59E0B);
-  static const Color absentColor = Color(0xFFEF4444);
+  Future<void> loadStudents() async {
+    try {
+      final data = await DBHelper.getStudentsByClass(widget.classId);
 
-  List<Student> students = [
-    Student(name: "Yousra", id: "2024IT1001"),
-    Student(name: "Amine", id: "2024IT1002"),
-    Student(name: "Asma", id: "2024IT1003"),
-    Student(name: "Mohamed", id: "2024IT1004"),
-  ];
+      students = data
+          .map<Map<String, dynamic>>((s) => {...s, "status": "Present"})
+          .toList();
 
-  // 🔁 CHANGE STATUS
-  void toggleStatus(int index) {
+      setState(() => loading = false);
+    } catch (e) {
+      setState(() => loading = false);
+    }
+  }
+
+  Future<void> _autoSave() async {
+    try {
+      final sessionId = await DBHelper.insertSession(widget.classId);
+      await DBHelper.insertAttendance(sessionId, students);
+    } catch (_) {}
+  }
+
+  void _cycleStatus(Map s) {
+    const order = ["Present", "Late", "Absent"];
+
+    int index = order.indexOf(s["status"]);
+    index = (index + 1) % order.length;
+
     setState(() {
-      students[index].status = nextStatus(students[index].status);
+      s["status"] = order[index];
     });
+
+    _autoSave();
+    _showToast(s["status"]);
   }
 
-  Status nextStatus(Status current) {
-    switch (current) {
-      case Status.present:
-        return Status.late;
-      case Status.late:
-        return Status.absent;
-      case Status.absent:
-        return Status.present;
-    }
-  }
-
-  // 📊 COUNT
-  int count(Status s) => students.where((e) => e.status == s).length;
-
-  Color getColor(Status status) {
-    switch (status) {
-      case Status.present:
-        return presentColor;
-      case Status.late:
-        return lateColor;
-      case Status.absent:
-        return absentColor;
-    }
-  }
-
-  String getText(Status status) {
-    switch (status) {
-      case Status.present:
-        return "Present";
-      case Status.late:
-        return "Late";
-      case Status.absent:
-        return "Absent";
-    }
-  }
-
-  void markAll(Status status) {
-    setState(() {
-      for (var s in students) {
-        s.status = status;
-      }
-    });
+  void _showToast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(milliseconds: 500),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.textMain,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    int present = count(Status.present);
-    int late = count(Status.late);
-    int absent = count(Status.absent);
+    if (loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
-    double progress = present / students.length;
+    if (students.isEmpty) {
+      return const Scaffold(body: Center(child: Text("No students yet")));
+    }
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: AppColors.bg,
 
       appBar: AppBar(
-        backgroundColor: bg,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: textMain),
         title: Text(
           widget.className,
           style: GoogleFonts.lexend(
-            color: textMain,
+            color: AppColors.textMain,
             fontWeight: FontWeight.bold,
           ),
         ),
       ),
 
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // 📊 STATS
-            Container(
+      body: Column(
+        children: [
+          _buildHeader(),
+
+          Expanded(
+            child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: border),
+              itemCount: students.length,
+              itemBuilder: (context, index) {
+                final s = students[index];
+
+                return Dismissible(
+                  key: Key(s["student_id"].toString()),
+
+                  background: _swipeBg(
+                    AppColors.success,
+                    Icons.check,
+                    "Present",
+                  ),
+                  secondaryBackground: _swipeBg(
+                    AppColors.danger,
+                    Icons.close,
+                    "Absent",
+                  ),
+
+                  onDismissed: (direction) {
+                    setState(() {
+                      s["status"] = direction == DismissDirection.startToEnd
+                          ? "Present"
+                          : "Absent";
+                    });
+
+                    _autoSave();
+                  },
+
+                  child: _studentCard(s),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ================= HEADER =================
+
+  Widget _buildHeader() {
+    int present = students.where((s) => s["status"] == "Present").length;
+    int late = students.where((s) => s["status"] == "Late").length;
+    int absent = students.where((s) => s["status"] == "Absent").length;
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Today Overview",
+            style: GoogleFonts.lexend(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textMain,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _statBox("Present", present, AppColors.success),
+              _statBox("Late", late, AppColors.warning),
+              _statBox("Absent", absent, AppColors.danger),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statBox(String title, int value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value.toString(),
+            style: TextStyle(fontWeight: FontWeight.bold, color: color),
+          ),
+          Text(
+            title,
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ================= CARD =================
+
+  Widget _studentCard(Map<String, dynamic> s) {
+    return GestureDetector(
+      onTap: () => _cycleStatus(s),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: AppColors.primaryLight,
+              child: Text(
+                s["student_name"][0],
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+            ),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _stat("Present", present, presentColor),
-                  _stat("Late", late, lateColor),
-                  _stat("Absent", absent, absentColor),
+                  Text(
+                    s["student_name"],
+                    style: GoogleFonts.lexend(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textMain,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Tap to change status",
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                  ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 15),
-
-            // 📈 PROGRESS
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: border,
-                color: primary,
-                minHeight: 8,
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            // ⚡ ACTIONS
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => markAll(Status.present),
-                    child: const Text("All Present"),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => markAll(Status.absent),
-                    child: const Text("All Absent"),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // 👥 LIST
-            Expanded(
-              child: ListView.builder(
-                itemCount: students.length,
-                itemBuilder: (context, index) {
-                  final s = students[index];
-
-                  return GestureDetector(
-                    onTap: () => toggleStatus(index),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: cardBg,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: border),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  s.name,
-                                  style: GoogleFonts.lexend(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  s.id,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: getColor(s.status).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              getText(s.status),
-                              style: TextStyle(
-                                color: getColor(s.status),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // 🔘 HISTORY BUTTON
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/history');
-                },
-                child: const Text("View History"),
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            // 💾 SAVE BUTTON
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                onPressed: () {
-                  sessions.add({
-                    "className": widget.className,
-                    "date": DateTime.now().toString(),
-                    "present": present,
-                    "late": late,
-                    "absent": absent,
-                  });
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Session Saved ✅")),
-                  );
-                },
-                child: const Text("SAVE SESSION"),
-              ),
-            ),
+            _statusBadge(s["status"]),
           ],
         ),
       ),
     );
   }
 
-  Widget _stat(String title, int value, Color color) {
-    return Column(
-      children: [
-        Text(
-          "$value",
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
+  Widget _statusBadge(String status) {
+    Color color;
+
+    switch (status) {
+      case "Present":
+        color = AppColors.success;
+        break;
+      case "Late":
+        color = AppColors.warning;
+        break;
+      case "Absent":
+        color = AppColors.danger;
+        break;
+      default:
+        color = Colors.grey;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
         ),
-        Text(title, style: const TextStyle(color: Colors.grey)),
-      ],
+      ),
+    );
+  }
+
+  // ================= SWIPE =================
+
+  Widget _swipeBg(Color color, IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      alignment: Alignment.centerLeft,
+      color: color.withOpacity(0.15),
+      child: Row(
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 8),
+          Text(text, style: TextStyle(color: color)),
+        ],
+      ),
     );
   }
 }

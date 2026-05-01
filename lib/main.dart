@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'onboarding_screen.dart';
 import 'login_screen.dart';
 import 'dashboard_screen.dart';
@@ -12,8 +13,6 @@ import 'class_list_screen.dart';
 import 'timetable_screen.dart';
 import 'today_sessions_screen.dart';
 import 'student_list_screen.dart';
-import 'models/class_model.dart';
-import 'models/student_model.dart';
 
 void main() {
   runApp(const AttendixApp());
@@ -40,14 +39,14 @@ class AttendixApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/dashboard': (context) => const DashboardScreen(),
         '/attendance': (context) => const AttendanceListScreen(),
-        '/settings': (context) => SettingsScreen(),
-        '/profile': (context) => ProfileScreen(),
-        '/history': (context) => SessionsHistoryScreen(),
-        '/session_details': (context) => SessionDetailsScreen(),
-        '/export': (context) => ExportScreen(),
-        '/classes': (context) => ClassListScreen(),
-        '/timetable': (context) => TimetableScreen(),
-        '/today_sessions': (context) => TodaySessionsScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        '/profile': (context) => const ProfileScreen(),
+        '/history': (context) => const SessionsHistoryScreen(),
+        '/session_details': (context) => const SessionDetailsScreen(),
+        '/export': (context) => const ExportScreen(),
+        '/classes': (context) => const ClassListScreen(),
+        '/timetable': (context) => const TimetableScreen(),
+        '/today_sessions': (context) => const TodaySessionsScreen(),
         '/students': (context) => const StudentListScreen(),
       },
     );

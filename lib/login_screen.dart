@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'database/db_helper.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,7 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isPasswordHidden = true;
   String? errorText;
 
-  void _login() {
+  void _login() async {
     String email = emailController.text.trim();
     String password = passwordController.text.trim();
 
@@ -30,12 +31,13 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // 🔥 مؤقت (بدون backend)
-    if (email == "admin" && password == "1234") {
+    final user = await DBHelper.loginUser(email, password);
+
+    if (user != null) {
       Navigator.pushReplacementNamed(context, '/dashboard');
     } else {
       setState(() {
-        errorText = "Invalid credentials";
+        errorText = "Invalid email or password";
       });
     }
   }

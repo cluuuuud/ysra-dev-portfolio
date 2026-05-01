@@ -148,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return SwitchListTile(
       title: Text(title, style: GoogleFonts.lexend(color: textMain)),
       value: value,
-      activeColor: primary,
+      activeThumbColor: primary,
       onChanged: onChanged,
     );
   }
