@@ -1,0 +1,970 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="db_v4.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="structure browser pragmas query" current="1"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="7524"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="Teachers" custom_title="0" dock_id="1" table="4,8:mainTeachers"/><dock_state state="000000ff00000000fd0000000100000002000003910000026afc0100000001fb000000160064006f0063006b00420072006f00770073006500310100000000000003910000012300ffffff000003910000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="Attendance" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="90"/><column index="2" value="127"/><column index="3" value="69"/><column index="4" value="71"/><column index="5" value="44"/><column index="6" value="78"/><column index="7" value="40"/><column index="8" value="118"/><column index="9" value="98"/><column index="10" value="113"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Audit_Log" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="35"/><column index="2" value="111"/><column index="3" value="191"/><column index="4" value="159"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Classes" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="53"/><column index="2" value="80"/><column index="3" value="167"/><column index="4" value="95"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Rooms" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="77"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Sessions" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="67"/><column index="2" value="82"/><column index="3" value="83"/><column index="4" value="69"/><column index="5" value="44"/><column index="6" value="40"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Student_Enrollment" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="127"/><column index="2" value="55"/><column index="3" value="83"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Students" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="126"/><column index="2" value="111"/><column index="3" value="175"/><column index="4" value="255"/><column index="5" value="87"/><column index="6" value="87"/><column index="7" value="55"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Teacher_Timetable" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="80"/><column index="2" value="55"/><column index="3" value="69"/><column index="4" value="71"/><column index="5" value="84"/><column index="6" value="69"/><column index="7" value="62"/><column index="8" value="83"/><column index="9" value="78"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Teachers" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="69"/><column index="2" value="191"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1">BEGIN TRANSACTION;
+
+-- =============================================================================
+-- IMPROVED SCHEMA - Classes table with class_name as PRIMARY KEY
+-- =============================================================================
+
+-- Classes table - using class_name as natural primary key
+CREATE TABLE IF NOT EXISTS Classes (
+   class_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_name TEXT,
+    unilevel TEXT,
+    academic_year TEXT,
+    UNIQUE(group_name, unilevel, academic_year)
+);
+
+-- Students table - improved with additional fields
+CREATE TABLE IF NOT EXISTS Students (
+    registration_number TEXT PRIMARY KEY,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT UNIQUE,
+    phone TEXT,
+    date_of_birth TEXT,
+    status TEXT DEFAULT 'Active'
+        CHECK(status IN ('Active', 'Inactive', 'Graduated', 'Withdrawn'))
+);
+
+-- added new (new table)
+
+CREATE TABLE IF NOT EXISTS Student_Enrollment (
+    registration_number TEXT NOT NULL,
+    class_id INTEGER NOT NULL,
+    session_type TEXT NOT NULL
+        CHECK(session_type IN ('Lecture','TD','TP')),
+
+    PRIMARY KEY (registration_number, class_id, session_type),
+
+    FOREIGN KEY (registration_number)
+        REFERENCES Students(registration_number)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (class_id)
+        REFERENCES Classes(class_id)
+        ON DELETE CASCADE
+);
+
+-- added new (trigger table)
+-- Prevent student from enrolling in more than 2 different unilevels
+CREATE TRIGGER IF NOT EXISTS enforce_max_two_unilevels
+BEFORE INSERT ON Student_Enrollment
+BEGIN
+    SELECT CASE
+        WHEN (
+            SELECT COUNT(DISTINCT c.unilevel)
+            FROM Student_Enrollment se
+            JOIN Classes c ON se.class_id = c.class_id
+            WHERE se.registration_number = NEW.registration_number
+        ) &gt;= 2
+
+        AND NOT EXISTS (
+            SELECT 1
+            FROM Student_Enrollment se
+            JOIN Classes c ON se.class_id = c.class_id
+            WHERE se.registration_number = NEW.registration_number
+            AND c.unilevel = (
+                SELECT unilevel
+                FROM Classes
+                WHERE class_id = NEW.class_id
+            )
+        )
+
+    THEN RAISE(ABORT, 'Student cannot enroll in more than 2 different unilevels')
+    END;
+END;
+
+CREATE TABLE IF NOT EXISTS Rooms (
+    room_name TEXT PRIMARY KEY
+);
+-- Subjects table
+CREATE TABLE IF NOT EXISTS Subjects (
+    subject_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_name TEXT UNIQUE NOT NULL
+);
+
+-- Teachers table
+CREATE TABLE IF NOT EXISTS Teachers (
+    teacher_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL
+);
+-- Teacher Timetable - changed FK to class_name
+CREATE TABLE IF NOT EXISTS Teacher_Timetable (
+    timetable_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_id INTEGER NOT NULL,
+    subject_id INTEGER NOT NULL,
+    teacher_id INTEGER NOT NULL,
+    day_of_week TEXT NOT NULL
+        CHECK(day_of_week IN ('Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday')),
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    session_type TEXT NOT NULL
+        CHECK(session_type IN ('Lecture', 'TD', 'TP')),
+    room_name TEXT,
+
+    FOREIGN KEY (class_id) REFERENCES Classes(class_id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+    FOREIGN KEY (subject_id) REFERENCES Subjects(subject_id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE,
+    FOREIGN KEY (teacher_id) REFERENCES Teachers(teacher_id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE,
+    FOREIGN KEY (room_name) REFERENCES Rooms(room_name)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL,
+
+    CHECK(end_time &gt; start_time),
+
+    UNIQUE(class_id, day_of_week, start_time)
+);
+-- Sessions table - added status tracking
+CREATE TABLE IF NOT EXISTS Sessions (
+    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timetable_id INTEGER NOT NULL,
+    session_date TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Scheduled'
+        CHECK(status IN ('Scheduled', 'Completed', 'Cancelled')),
+    notes TEXT,
+
+    FOREIGN KEY (timetable_id)
+        REFERENCES Teacher_Timetable(timetable_id)
+        ON DELETE CASCADE,
+
+    UNIQUE(timetable_id, session_date, start_time)
+);
+
+-- Attendance table - improved with timestamps and unique constraint
+CREATE TABLE IF NOT EXISTS Attendance (
+    attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    registration_number TEXT NOT NULL,
+    session_id INTEGER NOT NULL,
+    step_order INTEGER,
+    status TEXT NOT NULL
+        CHECK(status IN ('Present', 'Absent', 'Late', 'Excused')),
+    arrival_time TEXT,
+    notes TEXT,
+    participation_score INTEGER DEFAULT 0
+        CHECK(participation_score BETWEEN 0 AND 10),
+    discipline_score INTEGER DEFAULT 0
+        CHECK(discipline_score BETWEEN 0 AND 10),
+    preparation_score INTEGER DEFAULT 0
+        CHECK(preparation_score BETWEEN 0 AND 10),
+
+    FOREIGN KEY (registration_number)
+        REFERENCES Students(registration_number)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (session_id)
+        REFERENCES Sessions(session_id)
+        ON DELETE CASCADE,
+
+    UNIQUE(registration_number, session_id)
+);
+
+CREATE TABLE IF NOT EXISTS Audit_Log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT,
+    entity TEXT,
+    timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
+-- INDEXES for improved query performance
+-- =============================================================================
+
+-- Student indexes
+CREATE INDEX IF NOT EXISTS idx_students_name ON Students(last_name, first_name);
+
+-- Timetable indexes
+CREATE INDEX IF NOT EXISTS idx_timetable_day ON Teacher_Timetable(day_of_week);
+CREATE INDEX IF NOT EXISTS idx_timetable_subject ON Teacher_Timetable(subject_id);
+
+-- Session indexes
+CREATE INDEX IF NOT EXISTS idx_sessions_timetable ON Sessions(timetable_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_date ON Sessions(session_date);
+-- CREATE INDEX IF NOT EXISTS idx_sessions_status ON Sessions(status);
+
+-- Attendance indexes
+CREATE INDEX IF NOT EXISTS idx_attendance_student ON Attendance(registration_number);
+CREATE INDEX IF NOT EXISTS idx_attendance_session ON Attendance(session_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_status ON Attendance(status);
+
+
+
+
+-- =============================================================================
+-- UPDATED VIEWS - adjusted for class_name as primary key
+-- =============================================================================
+
+-- 1. Student Profile
+CREATE VIEW IF NOT EXISTS vw_Student_Profile AS
+SELECT
+    s.registration_number,
+    s.first_name || ' ' || s.last_name AS full_name,
+    s.first_name,
+    s.last_name,
+    s.email,
+    s.phone,
+    s.date_of_birth,
+    s.status,
+    se.class_id,
+    c.unilevel,
+    c.academic_year
+FROM Students s
+LEFT JOIN Student_Enrollment se
+    ON s.registration_number = se.registration_number
+LEFT JOIN Classes c
+    ON se.class_id = c.class_id;
+
+-- 2. Student Attendance Summary
+CREATE VIEW IF NOT EXISTS vw_Student_Attendance_Summary AS
+SELECT
+    s.registration_number,
+    s.first_name || ' ' || s.last_name AS student_name,
+    se.class_id,
+
+    COUNT(a.attendance_id) AS total_sessions,
+
+    SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) AS sessions_present,
+    SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) AS sessions_absent,
+    SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) AS sessions_late,
+    SUM(CASE WHEN a.status = 'Excused' THEN 1 ELSE 0 END) AS sessions_excused,
+
+    ROUND(
+        (SUM(CASE WHEN a.status IN ('Present', 'Late') THEN 1 ELSE 0 END) * 100.0) /
+        NULLIF(COUNT(a.attendance_id), 0),
+        2
+    ) AS attendance_rate
+
+FROM Students s
+
+LEFT JOIN Student_Enrollment se
+    ON s.registration_number = se.registration_number
+
+LEFT JOIN Attendance a
+    ON s.registration_number = a.registration_number
+
+WHERE s.status = 'Active'
+
+GROUP BY
+    s.registration_number,
+    s.first_name,
+    s.last_name,
+    se.class_id;
+
+-- 3. Session Details
+CREATE VIEW IF NOT EXISTS vw_Session_Details AS
+SELECT
+    sess.session_id,
+    sess.session_date,
+    sess.status AS session_status,
+    tt.timetable_id,
+    tt.class_id,
+    sub.subject_name,
+    t.full_name AS teacher_name,
+    tt.day_of_week,
+    tt.start_time,
+    tt.end_time,
+    tt.session_type,
+    tt.room_name,
+    COUNT(DISTINCT a.registration_number) AS students_recorded,
+    SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) AS students_present,
+    SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) AS students_absent,
+    SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) AS students_late
+
+FROM Sessions sess
+
+JOIN Teacher_Timetable tt 
+    ON sess.timetable_id = tt.timetable_id
+
+JOIN Subjects sub 
+    ON tt.subject_id = sub.subject_id
+
+JOIN Teachers t 
+    ON tt.teacher_id = t.teacher_id
+
+LEFT JOIN Attendance a 
+    ON sess.session_id = a.session_id
+
+GROUP BY
+    sess.session_id, sess.session_date, sess.status,
+    tt.timetable_id, tt.class_id,
+    sub.subject_name, t.full_name,
+    tt.day_of_week,
+    tt.start_time, tt.end_time, tt.session_type, tt.room_name;
+-- 4. Student Performance
+CREATE VIEW IF NOT EXISTS vw_Student_Performance AS
+SELECT
+    s.registration_number,
+    s.first_name || ' ' || s.last_name AS student_name,
+    se.class_id,
+
+    COUNT(a.attendance_id) AS total_evaluations,
+
+    ROUND(AVG(a.participation_score), 2) AS avg_participation,
+    ROUND(AVG(a.discipline_score), 2) AS avg_discipline,
+    ROUND(AVG(a.preparation_score), 2) AS avg_preparation,
+
+    ROUND(
+        (AVG(a.participation_score) +
+         AVG(a.discipline_score) +
+         AVG(a.preparation_score)) / 3.0,
+        2
+    ) AS overall_average,
+
+    MIN(a.participation_score) AS min_participation,
+    MAX(a.participation_score) AS max_participation
+
+FROM Students s
+
+LEFT JOIN Student_Enrollment se
+    ON s.registration_number = se.registration_number
+
+LEFT JOIN Attendance a
+    ON s.registration_number = a.registration_number
+
+WHERE s.status = 'Active'
+
+GROUP BY
+    s.registration_number,
+    s.first_name,
+    s.last_name,
+    se.class_id;
+
+-- 5. Class Statistics
+CREATE VIEW IF NOT EXISTS vw_Class_Statistics AS
+SELECT
+    c.class_id,
+    c.unilevel,
+    c.academic_year,
+
+    COUNT(DISTINCT se.registration_number) AS total_students,
+
+    COUNT(DISTINCT CASE
+        WHEN s.status = 'Active'
+        THEN se.registration_number
+    END) AS active_students,
+
+    COUNT(DISTINCT sess.session_id) AS total_sessions,
+
+    COUNT(DISTINCT CASE
+        WHEN sess.status = 'Completed'
+        THEN sess.session_id
+    END) AS completed_sessions,
+
+    ROUND(AVG(
+        CASE
+            WHEN a.status IN ('Present', 'Late') THEN 100.0
+            ELSE 0
+        END
+    ), 2) AS class_attendance_rate
+
+FROM Classes c
+
+LEFT JOIN Student_Enrollment se
+    ON c.class_id = se.class_id
+
+LEFT JOIN Students s
+    ON se.registration_number = s.registration_number
+
+LEFT JOIN Teacher_Timetable tt
+    ON c.class_id = tt.class_id
+
+LEFT JOIN Sessions sess
+    ON tt.timetable_id = sess.timetable_id
+
+LEFT JOIN Attendance a
+    ON sess.session_id = a.session_id
+    AND se.registration_number = a.registration_number
+
+GROUP BY
+    c.class_id,
+    c.unilevel,
+    c.academic_year;
+
+-- 6. Weekly Schedule
+CREATE VIEW IF NOT EXISTS vw_Weekly_Schedule AS
+SELECT
+    tt.timetable_id,
+    tt.class_id,
+    sub.subject_name,
+    tt.day_of_week,
+    tt.start_time,
+    tt.end_time,
+    tt.session_type,
+    tt.room_name,
+
+    CASE tt.day_of_week
+        WHEN 'Saturday' THEN 1
+        WHEN 'Sunday' THEN 2
+        WHEN 'Monday' THEN 3
+        WHEN 'Tuesday' THEN 4
+        WHEN 'Wednesday' THEN 5
+        WHEN 'Thursday' THEN 6
+    END AS day_order
+
+FROM Teacher_Timetable tt
+
+JOIN Subjects sub 
+    ON tt.subject_id = sub.subject_id
+
+ORDER BY day_order, tt.start_time;
+
+-- 7. Session Attendance Detail
+CREATE VIEW IF NOT EXISTS vw_Session_Attendance_Detail AS
+SELECT
+    a.attendance_id,
+    sess.session_id,
+    sess.session_date,
+    tt.class_id,
+    sub.subject_name,
+    tt.session_type,
+    s.registration_number,
+    s.first_name || ' ' || s.last_name AS student_name,
+    a.status,
+    a.arrival_time,
+    a.notes AS attendance_notes
+
+FROM Attendance a
+
+JOIN Students s
+    ON a.registration_number = s.registration_number
+
+JOIN Sessions sess
+    ON a.session_id = sess.session_id
+
+JOIN Teacher_Timetable tt
+    ON sess.timetable_id = tt.timetable_id
+
+JOIN Subjects sub
+    ON tt.subject_id = sub.subject_id;
+-- 8. Subject Performance
+CREATE VIEW IF NOT EXISTS vw_Subject_Performance AS
+SELECT
+    sub.subject_name,
+    tt.class_id,
+
+    COUNT(DISTINCT se.registration_number) AS students_enrolled,
+
+    COUNT(DISTINCT sess.session_id) AS sessions_held,
+
+    COUNT(DISTINCT CASE
+        WHEN sess.status = 'Completed'
+        THEN sess.session_id
+    END) AS sessions_completed,
+
+    ROUND(AVG(a.participation_score), 2) AS avg_participation,
+    ROUND(AVG(a.discipline_score), 2) AS avg_discipline,
+    ROUND(AVG(a.preparation_score), 2) AS avg_preparation,
+
+    ROUND(AVG(
+        CASE
+            WHEN a.status IN ('Present', 'Late') THEN 100.0
+            ELSE 0
+        END
+    ), 2) AS attendance_rate
+
+FROM Teacher_Timetable tt
+
+JOIN Subjects sub
+    ON tt.subject_id = sub.subject_id
+
+LEFT JOIN Sessions sess
+    ON tt.timetable_id = sess.timetable_id
+
+LEFT JOIN Student_Enrollment se
+    ON tt.class_id = se.class_id
+
+LEFT JOIN Students s
+    ON se.registration_number = s.registration_number
+    AND s.status = 'Active'
+
+LEFT JOIN Attendance a
+    ON sess.session_id = a.session_id
+    AND se.registration_number = a.registration_number
+
+GROUP BY
+    sub.subject_name,
+    tt.class_id;
+-- 9. At-Risk Students
+CREATE VIEW IF NOT EXISTS vw_At_Risk_Students AS
+SELECT
+    s.registration_number,
+    s.first_name || ' ' || s.last_name AS student_name,
+    se.class_id,
+    s.email,
+
+    ROUND(
+        (SUM(CASE
+            WHEN a.status IN ('Present', 'Late') THEN 1
+            ELSE 0
+        END) * 100.0) /
+        NULLIF(COUNT(a.attendance_id), 0),
+        2
+    ) AS attendance_rate,
+
+    ROUND(AVG(a.participation_score), 2) AS avg_participation,
+    ROUND(AVG(a.discipline_score), 2) AS avg_discipline,
+    ROUND(AVG(a.preparation_score), 2) AS avg_preparation,
+
+    ROUND(
+        (AVG(a.participation_score) +
+         AVG(a.discipline_score) +
+         AVG(a.preparation_score)) / 3.0,
+        2
+    ) AS overall_average,
+
+    CASE
+        WHEN (
+            (SUM(CASE WHEN a.status IN ('Present', 'Late') THEN 1 ELSE 0 END) * 100.0) /
+            NULLIF(COUNT(a.attendance_id), 0)
+        ) &lt; 75
+        THEN 'Low Attendance'
+    END AS attendance_risk,
+
+    CASE
+        WHEN (
+            (AVG(a.participation_score) +
+             AVG(a.discipline_score) +
+             AVG(a.preparation_score)) / 3.0
+        ) &lt; 50
+        THEN 'Low Performance'
+    END AS performance_risk
+
+FROM Students s
+
+LEFT JOIN Student_Enrollment se
+    ON s.registration_number = se.registration_number
+
+LEFT JOIN Attendance a
+    ON s.registration_number = a.registration_number
+
+WHERE s.status = 'Active'
+
+GROUP BY
+    s.registration_number,
+    s.first_name,
+    s.last_name,
+    se.class_id,
+    s.email
+
+HAVING
+    attendance_rate &lt; 75
+    OR overall_average &lt; 50
+    OR avg_discipline &lt; 60;
+
+-- 10. Recent Sessions
+CREATE VIEW IF NOT EXISTS vw_Recent_Sessions AS
+SELECT
+    sess.session_id,
+    sess.session_date,
+    sess.status AS session_status,
+    tt.class_id,
+    sub.subject_name,
+    tt.session_type,
+
+    COUNT(DISTINCT a.registration_number) AS students_recorded,
+
+    SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) AS present,
+    SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) AS absent,
+    SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) AS late,
+
+    ROUND(AVG(a.participation_score), 2) AS avg_participation
+
+FROM Sessions sess
+
+JOIN Teacher_Timetable tt
+    ON sess.timetable_id = tt.timetable_id
+
+JOIN Subjects sub
+    ON tt.subject_id = sub.subject_id
+
+LEFT JOIN Attendance a
+    ON sess.session_id = a.session_id
+
+GROUP BY
+    sess.session_id,
+    sess.session_date,
+    sess.status,
+    tt.class_id,
+    sub.subject_name,
+    tt.session_type
+
+ORDER BY sess.session_date DESC
+LIMIT 10;
+
+-- 11. Current_Session 
+CREATE VIEW IF NOT EXISTS vw_Current_Session AS
+SELECT
+    sess.session_id,
+    sess.session_date,
+    sess.start_time,
+    sess.status,
+
+    tt.class_id,
+    sub.subject_name,
+    tt.session_type,
+    tt.day_of_week,
+    tt.start_time AS timetable_start,
+    tt.end_time AS timetable_end,
+    tt.room_name
+
+FROM Sessions sess
+
+JOIN Teacher_Timetable tt
+    ON sess.timetable_id = tt.timetable_id
+
+JOIN Subjects sub
+    ON tt.subject_id = sub.subject_id
+
+WHERE
+    sess.session_date = DATE('now')
+    AND TIME('now') BETWEEN tt.start_time AND tt.end_time;
+-- 13. Ordered_Students_By_Class
+CREATE VIEW IF NOT EXISTS vw_Ordered_Students_By_Class AS
+SELECT
+    se.class_id,
+    s.registration_number,
+    s.first_name,
+    s.last_name,
+    s.first_name || ' ' || s.last_name AS full_name
+
+FROM Student_Enrollment se
+JOIN Students s
+    ON se.registration_number = s.registration_number
+
+WHERE s.status = 'Active'
+
+ORDER BY se.class_id, s.last_name, s.first_name;
+
+
+-- 14. vw_Next_Session
+CREATE VIEW IF NOT EXISTS vw_Next_Session AS
+SELECT
+    sess.session_id,
+    sess.session_date,
+    sess.start_time,
+
+    sub.subject_name,
+    tt.class_id,
+    tt.session_type,
+    tt.room_name
+
+FROM Sessions sess
+
+JOIN Teacher_Timetable tt
+    ON sess.timetable_id = tt.timetable_id
+
+JOIN Subjects sub
+    ON tt.subject_id = sub.subject_id
+
+WHERE
+    sess.status = 'Scheduled'
+    AND (
+        sess.session_date &gt; DATE('now')
+        OR (
+            sess.session_date = DATE('now')
+            AND sess.start_time &gt; TIME('now')
+        )
+    )
+
+ORDER BY sess.session_date ASC, sess.start_time ASC
+LIMIT 1;
+-- 15. vw_Session_Attendance_Rate
+CREATE VIEW IF NOT EXISTS vw_Session_Attendance_Rate AS
+SELECT
+    sess.session_id,
+    tt.class_id,
+
+    ROUND(
+        (SUM(CASE WHEN a.status IN ('Present','Late') THEN 1 ELSE 0 END) * 100.0) /
+        COUNT(a.attendance_id),
+        2
+    ) AS attendance_rate
+
+FROM Sessions sess
+JOIN Teacher_Timetable tt
+    ON sess.timetable_id = tt.timetable_id
+LEFT JOIN Attendance a
+    ON sess.session_id = a.session_id
+
+GROUP BY sess.session_id, tt.class_id;
+
+
+
+-- =========================================================
+-- 🧹 CLEAN SAFE MODE
+-- =========================================================
+DELETE FROM Attendance;
+DELETE FROM Sessions;
+DELETE FROM Teacher_Timetable;
+
+-- =========================================================
+-- 👨‍🏫 TEACHER
+-- =========================================================
+INSERT OR IGNORE INTO Teachers (full_name)
+VALUES ('Dr. Abdelkader Bensalem');
+
+-- =========================================================
+-- 📚 SUBJECTS
+-- =========================================================
+INSERT OR IGNORE INTO Subjects (subject_name) VALUES
+('Bases de Données Avancées'),
+('Algorithmique et Structures de Données'),
+('Programmation Orientée Objet');
+
+-- =========================================================
+-- 🏫 CLASS
+-- =========================================================
+INSERT OR IGNORE INTO Classes (group_name, unilevel, academic_year)
+VALUES ('A01','Licence','2025-2026');
+
+-- =========================================================
+-- 🧠 TIMETABLE (SAFE + NO DUPLICATES)
+-- =========================================================
+INSERT OR IGNORE INTO Teacher_Timetable
+(class_id, subject_id, teacher_id, day_of_week, start_time, end_time, session_type, room_name)
+
+SELECT
+    c.class_id,
+    s.subject_id,
+    t.teacher_id,
+    v.day_of_week,
+    v.start_time,
+    v.end_time,
+    v.session_type,
+    v.room_name
+FROM Classes c
+JOIN Teachers t ON t.full_name = 'Dr. Ghemougui Abdessettar'
+JOIN Subjects s
+JOIN (
+    SELECT 'Bases de Données Avancées' AS subject_name,
+           'Sunday' AS day_of_week,
+           '08:00' AS start_time,
+           '10:00' AS end_time,
+           'Lecture' AS session_type,
+           'S25' AS room_name
+
+    UNION ALL
+
+    SELECT 'Algorithmique et Structures de Données',
+           'Monday','10:00','12:00','TD','S26'
+
+    UNION ALL
+
+    SELECT 'Programmation Orientée Objet',
+           'Tuesday','08:00','10:00','Lecture','S28'
+) v
+ON s.subject_name = v.subject_name
+
+WHERE c.group_name = 'A01'
+  AND c.academic_year = '2025-2026';
+
+-- =========================================================
+-- 🎓 ENROLLMENT (SAFE)
+-- =========================================================
+INSERT OR IGNORE INTO Student_Enrollment (registration_number, class_id, session_type)
+SELECT
+    s.registration_number,
+    c.class_id,
+    'Lecture'
+FROM Students s
+JOIN Classes c
+WHERE c.group_name='A01'
+  AND c.academic_year='2025-2026';
+
+INSERT OR IGNORE INTO Student_Enrollment (registration_number, class_id, session_type)
+SELECT
+    s.registration_number,
+    c.class_id,
+    'TD'
+FROM Students s
+JOIN Classes c
+WHERE c.group_name='A01'
+  AND c.academic_year='2025-2026';
+
+-- =========================================================
+-- 📆 SESSIONS (AUTO GENERATED SAFE)
+-- =========================================================
+INSERT INTO Sessions (timetable_id, session_date, start_time, status)
+SELECT timetable_id, '2026-05-04', start_time, 'Completed'
+FROM Teacher_Timetable
+WHERE day_of_week='Sunday';
+
+INSERT INTO Sessions (timetable_id, session_date, start_time, status)
+SELECT timetable_id, '2026-05-05', start_time, 'Completed'
+FROM Teacher_Timetable
+WHERE day_of_week='Monday';
+
+INSERT INTO Sessions (timetable_id, session_date, start_time, status)
+SELECT timetable_id, '2026-05-06', start_time, 'Completed'
+FROM Teacher_Timetable
+WHERE day_of_week='Tuesday';
+
+-- =========================================================
+-- 📊 ATTENDANCE (FULL 10 COLUMNS FIXED)
+-- =========================================================
+
+-- SESSION 1
+INSERT INTO Attendance
+(
+    registration_number,
+    session_id,
+    step_order,
+    status,
+    arrival_time,
+    notes,
+    participation_score,
+    discipline_score,
+    preparation_score
+)
+SELECT
+    s.registration_number,
+    sess.session_id,
+    1,
+
+    CASE (ABS(RANDOM()) % 10)
+        WHEN 0 THEN 'Absent'
+        WHEN 1 THEN 'Late'
+        ELSE 'Present'
+    END,
+
+    CASE (ABS(RANDOM()) % 3)
+        WHEN 0 THEN '08:05'
+        WHEN 1 THEN '08:10'
+        ELSE NULL
+    END,
+
+    CASE (ABS(RANDOM()) % 5)
+        WHEN 0 THEN 'Good participation'
+        WHEN 1 THEN 'Late entry'
+        ELSE NULL
+    END,
+
+    (ABS(RANDOM() % 6) + 4),
+    (ABS(RANDOM() % 5) + 5),
+    (ABS(RANDOM() % 6) + 3)
+
+FROM Students s
+JOIN Sessions sess
+ON sess.timetable_id = (
+    SELECT timetable_id
+    FROM Teacher_Timetable
+    WHERE day_of_week='Sunday'
+    LIMIT 1
+)
+WHERE sess.session_date = '2026-05-04';
+
+-- SESSION 2
+INSERT INTO Attendance
+(
+    registration_number,
+    session_id,
+    step_order,
+    status,
+    arrival_time,
+    notes,
+    participation_score,
+    discipline_score,
+    preparation_score
+)
+SELECT
+    s.registration_number,
+    sess.session_id,
+    2,
+
+    CASE (ABS(RANDOM()) % 10)
+        WHEN 0 THEN 'Absent'
+        WHEN 1 THEN 'Late'
+        ELSE 'Present'
+    END,
+
+    CASE (ABS(RANDOM()) % 3)
+        WHEN 0 THEN '10:05'
+        WHEN 1 THEN '10:10'
+        ELSE NULL
+    END,
+
+    CASE (ABS(RANDOM()) % 6)
+        WHEN 0 THEN 'Late entry'
+        WHEN 1 THEN 'Good participation'
+        ELSE NULL
+    END,
+
+    (ABS(RANDOM() % 7) + 3),
+    (ABS(RANDOM() % 6) + 4),
+    (ABS(RANDOM() % 6) + 3)
+
+FROM Students s
+JOIN Sessions sess
+ON sess.timetable_id = (
+    SELECT timetable_id
+    FROM Teacher_Timetable
+    WHERE day_of_week='Monday'
+    LIMIT 1
+)
+WHERE sess.session_date = '2026-05-05';
+
+-- SESSION 3
+INSERT INTO Attendance
+(
+    registration_number,
+    session_id,
+    step_order,
+    status,
+    arrival_time,
+    notes,
+    participation_score,
+    discipline_score,
+    preparation_score
+)
+SELECT
+    s.registration_number,
+    sess.session_id,
+    3,
+
+    CASE (ABS(RANDOM()) % 10)
+        WHEN 0 THEN 'Absent'
+        WHEN 1 THEN 'Late'
+        ELSE 'Present'
+    END,
+
+    CASE (ABS(RANDOM()) % 3)
+        WHEN 0 THEN '08:00'
+        WHEN 1 THEN '08:15'
+        ELSE NULL
+    END,
+
+    CASE (ABS(RANDOM()) % 5)
+        WHEN 0 THEN 'Very active'
+        WHEN 1 THEN 'Normal participation'
+        ELSE NULL
+    END,
+
+    (ABS(RANDOM() % 8) + 2),
+    (ABS(RANDOM() % 6) + 4),
+    (ABS(RANDOM() % 6) + 3)
+
+FROM Students s
+JOIN Sessions sess
+ON sess.timetable_id = (
+    SELECT timetable_id
+    FROM Teacher_Timetable
+    WHERE day_of_week='Tuesday'
+    LIMIT 1
+)
+WHERE sess.session_date = '2026-05-06';
+
+-- =========================================================
+-- 🧾 AUDIT LOG
+-- =========================================================
+INSERT INTO Audit_Log(action, entity)
+VALUES ('SEED_EXECUTED','ATTENDIX_PRO_FULL_FIXED');
+INSERT OR IGNORE INTO Rooms (room_name) VALUES
+('S25'),('S26'),('S28');
+-- =========================================================
+-- COMMIT
+-- =========================================================
+COMMIT;</sql><current_tab id="0"/></tab_sql></sqlb_project>

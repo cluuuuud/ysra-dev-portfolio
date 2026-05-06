@@ -193,27 +193,4 @@ class DBHelper {
       "session_type": type,
     });
   }
-  // =========================
-  // ✅ LOGIN
-  // =========================
-
-  static Future<Map<String, dynamic>?> loginUser(
-    String email,
-    String password,
-  ) async {
-    final dbClient = await db;
-
-    final result = await dbClient.query(
-      "Users",
-      where: "email = ? AND password = ?",
-      whereArgs: [email, password],
-      limit: 1,
-    );
-
-    if (result.isNotEmpty) {
-      return result.first;
-    }
-
-    return null;
-  }
 }
