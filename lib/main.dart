@@ -36,7 +36,7 @@ class AttendixApp extends StatelessWidget {
 
       routes: {
         '/': (context) => const OnboardingScreen(),
-        '/login': (context) => const LoginScreen(),
+        '/login': (context) => LoginScreen(),
         '/dashboard': (context) => const DashboardScreen(),
         '/attendance': (context) => const AttendanceListScreen(),
         '/settings': (context) => const SettingsScreen(),
