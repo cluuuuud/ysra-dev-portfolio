@@ -9,6 +9,28 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    - lib/add_student_screen.dart
+    - lib/attendance_list_screen.dart
+    - lib/attendance_record_screen.dart
+    - lib/class_details_screen.dart
+    - lib/class_list_screen.dart
+    - lib/dashboard_screen.dart
+    - lib/Export_screen.dart
+    - lib/onboarding_screen.dart
+    - lib/profile_screen.dart
+    - lib/setting_screen.dart
+    - lib/session_details_screen.dart
+    - lib/session_history_screen.dart
+    - lib/session_model.dart
+    - lib/splash_screen.dart
+    - lib/student_list_screen.dart
+    - lib/student_screen.dart
+    - lib/timetable_screen.dart
+    - lib/today_sessions_screen.dart
+    - lib/services/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

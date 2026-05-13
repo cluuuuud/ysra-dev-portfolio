@@ -20,7 +20,6 @@ version: 1.0.0+1
 
 environment:
   sdk: ^3.10.4
-
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
 # consider running `flutter pub upgrade --major-versions`. Alternatively,
@@ -38,7 +37,7 @@ dependencies:
   sqflite: ^2.3.0
   path: ^1.9.0
   font_awesome_flutter: ^10.7.0 # للأيقونات المميزة
-  
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:
@@ -65,7 +64,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   # assets:
   assets:
-    - assets/database/db_v4.sqb.sqbpro
+    - assets/database/dbv5.db
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 
