@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:attendance_app/database/db_helper.dart';
-import 'package:attendance_app/app_colors.dart';
-import 'package:attendance_app/screens/attendance_flow_screen.dart';
+import '../database/db_helper.dart';
+import '../app_colors.dart';
+import 'attendance_flow_screen.dart';
 
 class AttendanceListScreen extends StatefulWidget {
   final int? preselectedClassId;
   final int? preselectedSessionId;
-  final String? preselectedClassName;
 
   const AttendanceListScreen({
     super.key,
     this.preselectedClassId,
     this.preselectedSessionId,
-    this.preselectedClassName,
   });
 
   @override
@@ -34,13 +32,31 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final today = await DBHelper.getTodaySessions();
-      final classes = await DBHelper.getClasses();
+      final results = await Future.wait([
+        DBHelper.getTodaySessions(),
+        DBHelper.getClasses(),
+      ]);
       setState(() {
-        _todaySessions = today;
-        _allClasses = classes;
+        _todaySessions = results[0] as List<Map<String, dynamic>>;
+        _allClasses = results[1] as List<Map<String, dynamic>>;
         _loading = false;
       });
+
+      // Auto-navigate إذا جاء من Dashboard
+      if (widget.preselectedClassId != null &&
+          widget.preselectedSessionId != null) {
+        final cls = _allClasses.firstWhere(
+          (c) => c['class_id'] == widget.preselectedClassId,
+          orElse: () => {},
+        );
+        if (cls.isNotEmpty && mounted) {
+          _openFlow(
+            classId: widget.preselectedClassId!,
+            className: cls['class_name'] ?? 'Class',
+            sessionId: widget.preselectedSessionId!,
+          );
+        }
+      }
     } catch (_) {
       setState(() => _loading = false);
     }
@@ -51,7 +67,7 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
     required String className,
     required int sessionId,
   }) {
-    Navigator.push<String>(
+    Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => AttendanceFlowScreen(
@@ -60,86 +76,38 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
           sessionId: sessionId,
         ),
       ),
-    ).then((result) {
-      _load();
-      if (!mounted) return;
-      final m = ScaffoldMessenger.of(context);
-      if (result == AttendanceFlowScreen.popCompleted) {
-        m.showSnackBar(SnackBar(content: Text('Session completed.', style: GoogleFonts.lexend())));
-      } else if (result == AttendanceFlowScreen.popSavedExit) {
-        m.showSnackBar(SnackBar(content: Text('Attendance saved.', style: GoogleFonts.lexend())));
-      }
-    });
+    ).then((_) => _load());
   }
 
-  Future<void> _offerTodaySession(Map<String, dynamic> s) async {
-    final subject = '${s['subject_shortname'] ?? s['subject_name'] ?? 'Session'}';
-    final clsName = s['class_name'] as String? ?? '';
-    final start = s['start_time'] as String? ?? '';
-    final end = s['end_time'] as String? ?? '';
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(subject, style: GoogleFonts.lexend(fontWeight: FontWeight.bold, fontSize: 18)),
-            Text(clsName, style: GoogleFonts.lexend(color: AppColors.textSub)),
-            Text('$start – $end', style: GoogleFonts.lexend(color: AppColors.textMuted, fontSize: 13)),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                final cid = DBHelper.parseId(s['class_id']);
-                final sid = DBHelper.parseId(s['session_id']);
-                if (cid == null || sid == null) return;
-                _openFlow(classId: cid, className: clsName.isEmpty ? 'Class' : clsName, sessionId: sid);
-              },
-              child: const Text('Open attendance'),
-            ),
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ],
-        ),
-      ),
+  Future<void> _startNewSession(Map<String, dynamic> cls) async {
+    // نجيب timetable slot للقسم
+    final schedule = await DBHelper.getWeeklySchedule();
+    final slot = schedule.firstWhere(
+      (s) => s['class_id'] == cls['class_id'],
+      orElse: () => {},
+    );
+
+    if (slot.isEmpty) {
+      _showError('No timetable slot found for ${cls['class_name']}');
+      return;
+    }
+
+    final sessionId = await DBHelper.getOrCreateSession(
+      timetableId: slot['timetable_id'] as int,
+      startTime: slot['start_time'] as String,
+    );
+
+    _openFlow(
+      classId: cls['class_id'] as int,
+      className: cls['class_name'] as String,
+      sessionId: sessionId,
     );
   }
 
-  Future<void> _offerNewSessionForClass(Map<String, dynamic> cls) async {
-    final cid = DBHelper.parseId(cls['class_id']);
-    if (cid == null) return;
-    final slots = await DBHelper.getTimetableSlotsForClassToday(cid);
-    if (!mounted) return;
-    if (slots.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No timetable for ${cls['class_name']} today', style: GoogleFonts.lexend())),
-      );
-      return;
-    }
-    Map<String, dynamic> pick() {
-      final now = DBHelper.sqlLocalTime();
-      for (final s in slots) {
-        final st = (s['start_time'] as String?) ?? '';
-        final en = (s['end_time'] as String?) ?? '';
-        if (st.isNotEmpty && en.isNotEmpty && now.compareTo(st) >= 0 && now.compareTo(en) < 0) return s;
-      }
-      for (final s in slots) {
-        final st = (s['start_time'] as String?) ?? '';
-        if (st.isNotEmpty && now.compareTo(st) < 0) return s;
-      }
-      return slots.last;
-    }
-
-    final slot = pick();
-    final tid = DBHelper.parseId(slot['timetable_id']);
-    final start = slot['start_time'] as String?;
-    if (tid == null || start == null) return;
-    final name = cls['class_name'] as String? ?? 'Class';
-    final sessionId = await DBHelper.getOrCreateSession(timetableId: tid, startTime: start);
-    if (!mounted) return;
-    _openFlow(classId: cid, className: name, sessionId: sessionId);
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: AppColors.danger),
+    );
   }
 
   @override
@@ -148,45 +116,207 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
       backgroundColor: AppColors.bg,
       appBar: AppBar(
         backgroundColor: AppColors.bg,
-        title: Text('Take Attendance', style: GoogleFonts.lexend(fontWeight: FontWeight.bold)),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textMain),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Take Attendance',
+          style: GoogleFonts.lexend(
+            color: AppColors.textMain,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
           : RefreshIndicator(
               onRefresh: _load,
+              color: AppColors.primary,
               child: ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
+                  // ── Today's Sessions ──
                   if (_todaySessions.isNotEmpty) ...[
-                    Text("Today's Sessions", style: GoogleFonts.lexend(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    ..._todaySessions.map(
-                      (s) => Card(
-                        child: ListTile(
-                          title: Text(
-                            '${s['subject_shortname'] ?? s['subject_name']} — ${s['class_name']}',
-                            style: GoogleFonts.lexend(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Text('${s['start_time']} · ${s['session_status']}'),
-                          onTap: () => _offerTodaySession(s),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+                    _sectionLabel("Today's Sessions"),
+                    const SizedBox(height: 10),
+                    ..._todaySessions.map(_todayCard),
+                    const SizedBox(height: 28),
                   ],
-                  Text('All Classes', style: GoogleFonts.lexend(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  ..._allClasses.map(
-                    (c) => Card(
-                      child: ListTile(
-                        title: Text(c['class_name']?.toString() ?? '', style: GoogleFonts.lexend()),
-                        onTap: () => _offerNewSessionForClass(c),
-                      ),
-                    ),
-                  ),
+
+                  // ── All Classes ──
+                  _sectionLabel("All Classes"),
+                  const SizedBox(height: 10),
+                  ..._allClasses.map(_classCard),
                 ],
               ),
             ),
     );
   }
+
+  Widget _todayCard(Map<String, dynamic> s) {
+    final total = (s['students_recorded'] as int?) ?? 0;
+    final isDone = s['session_status'] == 'Completed';
+    final present = (s['students_present'] as int?) ?? 0;
+    final pct = total > 0 ? present / total : 0.0;
+
+    return GestureDetector(
+      onTap: () => _openFlow(
+        classId: s['class_id'] as int,
+        className: s['class_name'] as String,
+        sessionId: s['session_id'] as int,
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDone
+                ? AppColors.border
+                : AppColors.primary.withOpacity(0.4),
+            width: isDone ? 1 : 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: isDone ? AppColors.successBg : AppColors.primaryBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                isDone ? Icons.check_circle : Icons.edit_note,
+                color: isDone ? AppColors.success : AppColors.primary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${s['subject_shortname'] ?? s['subject_name']} — ${s['class_name']}',
+                    style: GoogleFonts.lexend(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textMain,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: pct,
+                      minHeight: 4,
+                      backgroundColor: AppColors.border,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isDone ? AppColors.success : AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$present / $total recorded  ·  ${s['start_time']}',
+                    style: GoogleFonts.lexend(
+                      color: AppColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textMuted,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _classCard(Map<String, dynamic> cls) {
+    final name = cls['class_name'] as String? ?? '?';
+    return GestureDetector(
+      onTap: () => _startNewSession(cls),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  name.substring(0, 1),
+                  style: GoogleFonts.lexend(
+                    color: AppColors.textSub,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: GoogleFonts.lexend(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textMain,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    '${cls['unilevel'] ?? ''} · ${cls['academic_year'] ?? ''} · ${cls['session_type'] ?? ''}',
+                    style: GoogleFonts.lexend(
+                      color: AppColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.play_arrow_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) => Text(
+    text,
+    style: GoogleFonts.lexend(
+      fontWeight: FontWeight.bold,
+      color: AppColors.textMain,
+      fontSize: 14,
+    ),
+  );
 }

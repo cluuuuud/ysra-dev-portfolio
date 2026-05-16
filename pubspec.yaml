@@ -38,6 +38,9 @@ dependencies:
   path: ^1.9.0
   font_awesome_flutter: ^10.7.0 # للأيقونات المميزة
   shared_preferences: ^2.2.2
+  csv: ^6.0.0
+  file_picker: ^8.0.0
+  path_provider: ^2.1.1
 
 dev_dependencies:
   flutter_test:
@@ -52,6 +55,7 @@ dev_dependencies:
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
+
 
 # The following section is specific to Flutter packages.
 flutter:
