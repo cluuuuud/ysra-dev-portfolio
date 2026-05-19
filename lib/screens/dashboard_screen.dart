@@ -18,18 +18,20 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   // ── State ──────────────────────────────────────────────────────────────────
-  Map<String, dynamic>? _currentSession; // الحصة الجارية الآن
-  Map<String, dynamic>? _nextSession; // الحصة القادمة
-  Map<String, dynamic>? _lastSession; // آخر جلسة مكتملة
+  Map<String, dynamic>? _currentSession;
+  Map<String, dynamic>? _nextSession;
+  Map<String, dynamic>? _lastSession;
   int _atRiskCount = 0;
   double _avgRate = 0;
   int _classCount = 0;
   double _weeklyRate = 0;
   List<Map<String, dynamic>> _todaySlots = [];
-  List<Map<String, dynamic>> _atRiskList = []; // أول 3 طلبة في خطر
-  bool _loading = true;
+  List<Map<String, dynamic>> _atRiskList = [];
 
-  // عداد تنازلي للحصة القادمة
+  // ✅ مفصول: أول تحميل يعرض spinner، الباقي يحدث في الخلفية
+  bool _firstLoad = true;
+  bool _refreshing = false;
+
   Timer? _timer;
   String _countdown = '';
 
@@ -37,8 +39,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _load();
-    // نجدد كل دقيقة لتحديث الحصة الجارية والعداد
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _load());
+    // تحديث كل دقيقة بدون spinner
+    _timer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _silentRefresh(),
+    );
   }
 
   @override
@@ -47,46 +52,81 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  // ── تحميل أول مرة (مع spinner) ────────────────────────────────────────────
   Future<void> _load() async {
     if (!mounted) return;
-    setState(() => _loading = true);
+    if (_firstLoad) setState(() => _firstLoad = true);
+
+    await _fetchAll();
+
+    if (mounted) setState(() => _firstLoad = false);
+  }
+
+  // ── تحديث صامت (بدون spinner) ─────────────────────────────────────────────
+  Future<void> _silentRefresh() async {
+    if (!mounted || _refreshing) return;
+    _refreshing = true;
+    await _fetchAll();
+    _refreshing = false;
+    if (mounted) setState(() {});
+  }
+
+  // ── جلب كل البيانات بالتوازي ─────────────────────────────────────────────
+  Future<void> _fetchAll() async {
     try {
-      final results = await Future.wait([
-        DBHelper.getCurrentSession(), // 0
-        DBHelper.getNextSession(), // 1
-        DBHelper.getLastCompletedSession(), // 2
-        DBHelper.getAtRiskCount(), // 3
-        DBHelper.getAtRiskStudents(), // 4
-        DBHelper.getAvgClassRate(), // 5
-        DBHelper.getClassCount(), // 6
-        DBHelper.getWeeklyAttendanceRate(), // 7
-        DBHelper.getWeeklySchedule(), // 8
-      ]);
+      // ✅ نقسم إلى مجموعتين: المهمة أولاً، ثم الأقل أهمية
+      // المجموعة 1: الحصة الحالية والقادمة (الأسرع)
+      final group1 =
+          await Future.wait([
+            DBHelper.getCurrentSession(), // 0
+            DBHelper.getNextSession(), // 1
+            DBHelper.getLastCompletedSession(), // 2
+          ]).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => [null, null, null],
+          );
+
+      // المجموعة 2: الإحصائيات
+      final group2 =
+          await Future.wait([
+            DBHelper.getAtRiskCount(), // 0
+            DBHelper.getAtRiskStudents(), // 1
+            DBHelper.getAvgClassRate(), // 2
+            DBHelper.getClassCount(), // 3
+            DBHelper.getWeeklyAttendanceRate(), // 4
+            DBHelper.getWeeklySchedule(), // 5
+          ]).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => [
+              0,
+              <Map<String, dynamic>>[],
+              0.0,
+              0,
+              0.0,
+              <Map<String, dynamic>>[],
+            ],
+          );
+
+      if (!mounted) return;
 
       final today = _todayName();
-      final allSlots = results[8] as List<Map<String, dynamic>>;
-      final next = results[1] as Map<String, dynamic>?;
-      final atRiskAll = results[4] as List<Map<String, dynamic>>;
+      final allSlots = group2[5] as List<Map<String, dynamic>>;
 
-      if (mounted) {
-        setState(() {
-          _currentSession = results[0] as Map<String, dynamic>?;
-          _nextSession = next;
-          _lastSession = results[2] as Map<String, dynamic>?;
-          _atRiskCount = results[3] as int;
-          _atRiskList = atRiskAll.take(3).toList();
-          _avgRate = results[5] as double;
-          _classCount = results[6] as int;
-          _weeklyRate = results[7] as double;
-          _todaySlots = allSlots
-              .where((s) => s['day_of_week'] == today)
-              .toList();
-          _loading = false;
-        });
-        _updateCountdown();
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      _currentSession = group1[0] as Map<String, dynamic>?;
+      _nextSession = group1[1] as Map<String, dynamic>?;
+      _lastSession = group1[2] as Map<String, dynamic>?;
+      _atRiskCount = (group2[0] as int?) ?? 0;
+      _atRiskList = ((group2[1] as List<Map<String, dynamic>>?) ?? [])
+          .take(3)
+          .toList();
+      _avgRate = (group2[2] as double?) ?? 0;
+      _classCount = (group2[3] as int?) ?? 0;
+      _weeklyRate = (group2[4] as double?) ?? 0;
+      _todaySlots = allSlots.where((s) => s['day_of_week'] == today).toList();
+
+      _updateCountdown();
+    } catch (e) {
+      debugPrint('Dashboard _fetchAll error: $e');
     }
   }
 
@@ -96,28 +136,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _countdown = '';
       return;
     }
-    final startStr = _nextSession!['start_time'] as String? ?? '';
-    final dateStr = _nextSession!['session_date'] as String? ?? '';
     try {
+      final startStr = _nextSession!['start_time'] as String? ?? '';
+      final dateStr = _nextSession!['session_date'] as String? ?? '';
       final parts = startStr.split(':');
+      final dateParts = dateStr.split('-');
       final now = DateTime.now();
       final start = DateTime(
-        int.parse(dateStr.split('-')[0]),
-        int.parse(dateStr.split('-')[1]),
-        int.parse(dateStr.split('-')[2]),
+        int.parse(dateParts[0]),
+        int.parse(dateParts[1]),
+        int.parse(dateParts[2]),
         int.parse(parts[0]),
         int.parse(parts[1]),
       );
       final diff = start.difference(now);
-      if (diff.isNegative) {
+      if (diff.isNegative || diff.inSeconds < 0) {
         _countdown = '';
         return;
       }
-      if (diff.inHours > 0) {
-        _countdown = 'in ${diff.inHours}h ${diff.inMinutes.remainder(60)}m';
-      } else {
-        _countdown = 'in ${diff.inMinutes}m';
-      }
+      _countdown = diff.inHours > 0
+          ? 'in ${diff.inHours}h ${diff.inMinutes.remainder(60)}m'
+          : 'in ${diff.inMinutes}m';
     } catch (_) {
       _countdown = '';
     }
@@ -148,74 +187,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ══════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
+    // أول تحميل فقط يعرض spinner
+    if (_firstLoad) {
+      return const Scaffold(
+        backgroundColor: AppColors.bg,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _load,
           color: AppColors.primary,
-          child: _loading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                )
-              : CustomScrollView(
-                  slivers: [
-                    _appBar(),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate([
-                          // ══ 1. LIVE SESSION — أول شيء يراه الأستاذ ══════
-                          if (_currentSession != null) ...[
-                            _liveBanner(_currentSession!),
-                            const SizedBox(height: 16),
-                          ],
+          child: CustomScrollView(
+            slivers: [
+              _appBar(),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    // ══ 1. LIVE SESSION — أعلى الصفحة دائماً ════════════
+                    if (_currentSession != null) ...[
+                      _liveBanner(_currentSession!),
+                      const SizedBox(height: 14),
+                    ]
+                    // ══ 2. NEXT SESSION — إذا ما في حصة حالية ═══════════
+                    else if (_nextSession != null) ...[
+                      _nextSessionBanner(_nextSession!),
+                      const SizedBox(height: 14),
+                    ],
 
-                          // ══ 2. AT-RISK ALERT (إذا في طلبة في خطر) ═══════
-                          if (_atRiskCount > 0) ...[
-                            _atRiskAlert(),
-                            const SizedBox(height: 16),
-                          ],
+                    // ══ 3. AT-RISK ALERT ════════════════════════════════
+                    if (_atRiskCount > 0) ...[
+                      _atRiskAlert(),
+                      const SizedBox(height: 14),
+                    ],
 
-                          // ══ 3. QUICK ACCESS ════════════════════════════
-                          _quickAccessSection(),
-                          const SizedBox(height: 24),
+                    // ══ 4. QUICK ACCESS ════════════════════════════════
+                    _quickAccessSection(),
+                    const SizedBox(height: 22),
 
-                          // ══ 4. OVERVIEW STATS ══════════════════════════
-                          _sectionHeader('Overview', Icons.bar_chart_outlined),
-                          const SizedBox(height: 12),
-                          _overviewCards(),
-                          const SizedBox(height: 10),
-                          _weeklyRateBanner(),
-                          const SizedBox(height: 24),
+                    // ══ 5. OVERVIEW ════════════════════════════════════
+                    _sectionHeader('Overview', Icons.bar_chart_outlined),
+                    const SizedBox(height: 10),
+                    _overviewCards(),
+                    const SizedBox(height: 10),
+                    _weeklyRateBanner(),
+                    const SizedBox(height: 22),
 
-                          // ══ 5. NEXT SESSION ════════════════════════════
-                          if (_nextSession != null &&
-                              _currentSession == null) ...[
-                            _sectionHeader(
-                              'Next Session  $_countdown',
-                              Icons.schedule_outlined,
-                            ),
-                            const SizedBox(height: 12),
-                            _nextSessionCard(_nextSession!),
-                            const SizedBox(height: 24),
-                          ],
-
-                          // ══ 6. LAST SESSION ════════════════════════════
-                          if (_lastSession != null) ...[
-                            _sectionHeader(
-                              'Last Session',
-                              Icons.history_outlined,
-                            ),
-                            const SizedBox(height: 12),
-                            _lastSessionCard(_lastSession!),
-                            const SizedBox(height: 24),
-                          ],
-                        ]),
-                      ),
-                    ),
-                  ],
+                    // ══ 6. LAST SESSION ════════════════════════════════
+                    if (_lastSession != null) ...[
+                      _sectionHeader('Last Session', Icons.history_outlined),
+                      const SizedBox(height: 10),
+                      _lastSessionCard(_lastSession!),
+                    ],
+                  ]),
                 ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -226,7 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ══════════════════════════════════════════════════════════════════════════
   Widget _appBar() => SliverToBoxAdapter(
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Row(
         children: [
           Column(
@@ -240,7 +274,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 2),
               Text(
                 'ATTENDIX',
                 style: GoogleFonts.lexend(
@@ -253,6 +286,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const Spacer(),
+          // Refresh indicator خفي
+          if (_refreshing)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primary,
+              ),
+            ),
+          const SizedBox(width: 10),
           GestureDetector(
             onTap: () => Navigator.pushNamed(context, '/settings'),
             child: Container(
@@ -276,7 +320,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   );
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  1. LIVE BANNER — الحصة الجارية الآن
+  //  1. LIVE BANNER
   // ══════════════════════════════════════════════════════════════════════════
   Widget _liveBanner(Map<String, dynamic> s) {
     return GestureDetector(
@@ -292,15 +336,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xFF16A34A), // أخضر غامق
+          color: const Color(0xFF16A34A),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Live badge
             Row(
               children: [
+                // Live dot
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -345,24 +389,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: 10),
-
-            // Subject + class
             Text(
-              '${s['subject_shortname'] ?? s['subject_name'] ?? '—'}',
+              s['subject_shortname'] ?? s['subject_name'] ?? '—',
               style: GoogleFonts.lexend(
                 color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 2),
             Text(
               '${s['class_name'] ?? '—'}  ·  ${s['room_name'] ?? 'No room'}',
               style: GoogleFonts.lexend(color: Colors.white70, fontSize: 13),
             ),
             const SizedBox(height: 14),
-
-            // CTA
             Container(
               height: 42,
               decoration: BoxDecoration(
@@ -387,7 +426,109 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  2. AT-RISK ALERT
+  //  2. NEXT SESSION BANNER (يظهر فقط إذا ما في حصة حالية)
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _nextSessionBanner(Map<String, dynamic> s) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AttendanceListScreen()),
+      ).then((_) => _load()),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.primary.withOpacity(0.4),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.warningBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.schedule,
+                color: AppColors.warning,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBg,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'NEXT',
+                          style: GoogleFonts.lexend(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                      if (_countdown.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          _countdown,
+                          style: GoogleFonts.lexend(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${s['subject_shortname'] ?? s['subject_name'] ?? '—'}  —  ${s['class_name'] ?? '—'}',
+                    style: GoogleFonts.lexend(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textMain,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    '${s['start_time']} – ${s['end_time']}  ·  ${s['room_name'] ?? 'No room'}',
+                    style: GoogleFonts.lexend(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textMuted,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  3. AT-RISK ALERT
   // ══════════════════════════════════════════════════════════════════════════
   Widget _atRiskAlert() {
     return Container(
@@ -408,15 +549,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 size: 18,
               ),
               const SizedBox(width: 8),
-              Text(
-                '$_atRiskCount student${_atRiskCount > 1 ? 's' : ''} need attention',
-                style: GoogleFonts.lexend(
-                  color: AppColors.danger,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+              Expanded(
+                child: Text(
+                  '$_atRiskCount student${_atRiskCount > 1 ? 's' : ''} need attention',
+                  style: GoogleFonts.lexend(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
               ),
-              const Spacer(),
               GestureDetector(
                 onTap: () => Navigator.push(
                   context,
@@ -434,8 +576,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-
-          // أول 3 طلبة في خطر
           if (_atRiskList.isNotEmpty) ...[
             const SizedBox(height: 10),
             ..._atRiskList.map((st) {
@@ -505,79 +645,73 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  3. QUICK ACCESS
+  //  4. QUICK ACCESS
   // ══════════════════════════════════════════════════════════════════════════
-  Widget _quickAccessSection() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _rowCard(
-                'Attendance',
-                Icons.edit_note_outlined,
-                AppColors.success,
-                AppColors.successBg,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AttendanceListScreen(),
-                  ),
-                ).then((_) => _load()),
+  Widget _quickAccessSection() => Column(
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: _rowCard(
+              'Attendance',
+              Icons.edit_note_outlined,
+              AppColors.success,
+              AppColors.successBg,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AttendanceListScreen()),
+              ).then((_) => _load()),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _rowCard(
+              'Session History',
+              Icons.history_outlined,
+              AppColors.warning,
+              AppColors.warningBg,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SessionHistoryScreen()),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _rowCard(
-                'Session History',
-                Icons.history_outlined,
-                AppColors.warning,
-                AppColors.warningBg,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SessionHistoryScreen(),
-                  ),
-                ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          Expanded(
+            child: _rowCard(
+              'Management',
+              Icons.manage_accounts_outlined,
+              AppColors.textSub,
+              AppColors.divider,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ManagementScreen()),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _rowCard(
-                'Management',
-                Icons.manage_accounts_outlined,
-                AppColors.textSub,
-                AppColors.divider,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ManagementScreen()),
-                ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _rowCard(
+              'Import / Export',
+              Icons.import_export_outlined,
+              AppColors.danger,
+              AppColors.dangerBg,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ImportExportScreen()),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _rowCard(
-                'Import / Export',
-                Icons.import_export_outlined,
-                AppColors.danger,
-                AppColors.dangerBg,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ImportExportScreen()),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _timetableCard(),
-      ],
-    );
-  }
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      _timetableCard(),
+    ],
+  );
 
   Widget _rowCard(
     String label,
@@ -628,9 +762,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ── Timetable card مع حصص اليوم ───────────────────────────────────────────
   Widget _timetableCard() {
-    final today = _todayName();
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
@@ -675,7 +807,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       Text(
-                        today,
+                        _todayName(),
                         style: GoogleFonts.lexend(
                           color: AppColors.textMuted,
                           fontSize: 11,
@@ -713,7 +845,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             if (_todaySlots.isEmpty)
               Padding(
-                padding: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.only(top: 10),
                 child: Text(
                   'No sessions today',
                   style: GoogleFonts.lexend(
@@ -723,7 +855,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               )
             else ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               const Divider(height: 1, color: AppColors.border),
               const SizedBox(height: 10),
               ..._todaySlots.map(_miniSlot),
@@ -736,12 +868,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _miniSlot(Map<String, dynamic> slot) {
     final type = slot['session_type'] as String? ?? '';
-    final subject = slot['subject_shortname'] as String? ?? '—';
-    final cls = slot['class_name'] as String? ?? '—';
-    final start = slot['start_time'] as String? ?? '';
-    final end = slot['end_time'] as String? ?? '';
-    final room = slot['room_name'] as String?;
-
     Color tc, tb;
     switch (type) {
       case 'TD':
@@ -760,6 +886,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         tc = AppColors.textMuted;
         tb = AppColors.divider;
     }
+    final subject = slot['subject_shortname'] as String? ?? '—';
+    final cls = slot['class_name'] as String? ?? '—';
+    final start = slot['start_time'] as String? ?? '';
+    final end = slot['end_time'] as String? ?? '';
+    final room = slot['room_name'] as String?;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -821,7 +952,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
                 Text(
                   room != null ? '$cls  ·  $room' : cls,
                   style: GoogleFonts.lexend(
@@ -838,7 +968,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  4. OVERVIEW CARDS
+  //  5. OVERVIEW
   // ══════════════════════════════════════════════════════════════════════════
   Widget _overviewCards() => Row(
     children: [
@@ -914,7 +1044,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ),
   );
 
-  // ── Weekly Rate ────────────────────────────────────────────────────────────
   Widget _weeklyRateBanner() {
     final pct = _weeklyRate.clamp(0.0, 100.0);
     final Color rc = pct >= 80
@@ -979,87 +1108,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  5. NEXT SESSION
-  // ══════════════════════════════════════════════════════════════════════════
-  Widget _nextSessionCard(Map<String, dynamic> s) {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AttendanceListScreen(
-            preselectedClassId: _toInt(s['class_id']),
-            preselectedSessionId: _toInt(s['session_id']),
-          ),
-        ),
-      ).then((_) => _load()),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppColors.primary.withOpacity(0.3),
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.warningBg,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.schedule, color: AppColors.warning),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${s['subject_shortname'] ?? s['subject_name'] ?? '—'}  —  ${s['class_name'] ?? '—'}',
-                    style: GoogleFonts.lexend(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textMain,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${s['session_date']}  ·  ${s['start_time']} – ${s['end_time']}',
-                    style: GoogleFonts.lexend(
-                      color: AppColors.textMuted,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (_countdown.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.warningBg,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _countdown,
-                  style: GoogleFonts.lexend(
-                    color: AppColors.warning,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
   //  6. LAST SESSION
   // ══════════════════════════════════════════════════════════════════════════
   Widget _lastSessionCard(Map<String, dynamic> s) {
@@ -1107,7 +1155,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: 2),
                   Text(
                     s['session_date'] ?? '—',
                     style: GoogleFonts.lexend(
