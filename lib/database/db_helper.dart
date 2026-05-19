@@ -26,6 +26,126 @@ class DBHelper {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
+  //  ATTENDANCE FLOW
+  // ══════════════════════════════════════════════════════════════════════════
+
+  static Future<List<Map<String, dynamic>>> getTodayTimetableSlots() async {
+    final d = await db;
+    const dayNames = {
+      1: 'Monday',
+      2: 'Tuesday',
+      3: 'Wednesday',
+      4: 'Thursday',
+      5: 'Friday',
+      6: 'Saturday',
+      7: 'Sunday',
+    };
+    final todayName = dayNames[DateTime.now().weekday] ?? 'Monday';
+    return d.rawQuery(
+      """
+      SELECT
+        tt.timetable_id,
+        tt.day_of_week,
+        tt.start_time,
+        tt.end_time,
+        tt.session_type,
+        tt.room_name,
+        sub.subject_shortname,
+        sub.subject_name,
+        sub.subject_id
+      FROM Teacher_Timetable tt
+      JOIN Subjects sub ON tt.subject_id = sub.subject_id
+      WHERE tt.day_of_week = ?
+      ORDER BY tt.start_time ASC
+    """,
+      [todayName],
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> getClassesByTimetableId(
+    int timetableId,
+  ) async {
+    final d = await db;
+    return d.rawQuery(
+      """
+      SELECT DISTINCT
+        c.class_id,
+        c.class_name,
+        c.unilevel,
+        c.academic_year,
+        c.session_type,
+        tt.timetable_id,
+        tt.start_time,
+        tt.end_time,
+        tt.room_name
+      FROM Teacher_Timetable tt
+      JOIN Classes c ON tt.class_id = c.class_id
+      WHERE tt.timetable_id = ?
+      ORDER BY c.class_name ASC
+    """,
+      [timetableId],
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> getClassesForSlot({
+    required int subjectId,
+    required String dayOfWeek,
+    required String startTime,
+  }) async {
+    final d = await db;
+    return d.rawQuery(
+      """
+      SELECT
+        c.class_id,
+        c.class_name,
+        c.unilevel,
+        c.academic_year,
+        c.session_type,
+        tt.timetable_id,
+        tt.start_time,
+        tt.end_time,
+        tt.room_name,
+        (SELECT COUNT(*) FROM Student_Enrollment se WHERE se.class_id = c.class_id) AS student_count
+      FROM Teacher_Timetable tt
+      JOIN Classes c ON tt.class_id = c.class_id
+      WHERE tt.subject_id  = ?
+        AND tt.day_of_week = ?
+        AND tt.start_time  = ?
+      ORDER BY c.class_name ASC
+    """,
+      [subjectId, dayOfWeek, startTime],
+    );
+  }
+
+  static Future<int> getOrCreateSession({
+    required int timetableId,
+    required String startTime,
+  }) async {
+    final d = await db;
+    final now = DateTime.now();
+    final dateStr =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    final existing = await d.rawQuery(
+      """
+      SELECT session_id FROM Sessions
+      WHERE timetable_id = ? AND session_date = ? AND start_time = ?
+      LIMIT 1
+    """,
+      [timetableId, dateStr, startTime],
+    );
+
+    if (existing.isNotEmpty) return existing.first['session_id'] as int;
+
+    return d.insert("Sessions", {
+      "timetable_id": timetableId,
+      "session_date": dateStr,
+      "start_time": startTime,
+      "status": "Scheduled",
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
   //  DASHBOARD
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -97,8 +217,6 @@ class DBHelper {
     return d.rawQuery("SELECT * FROM vw_Recent_Sessions LIMIT ?", [limit]);
   }
 
-  // ── At-Risk Students (من vw_At_Risk_Students) ─────────────────────────────
-  /// عدد الطلبة المعرّضين للخطر
   static Future<int> getAtRiskCount() async {
     final d = await db;
     try {
@@ -111,7 +229,6 @@ class DBHelper {
     }
   }
 
-  /// قائمة الطلبة المعرّضين للخطر (للعرض التفصيلي)
   static Future<List<Map<String, dynamic>>> getAtRiskStudents() async {
     final d = await db;
     try {
@@ -121,13 +238,11 @@ class DBHelper {
     }
   }
 
-  // ── Class Statistics (من vw_Class_Statistics) ────────────────────────────
   static Future<List<Map<String, dynamic>>> getClassStatistics() async {
     final d = await db;
     return d.rawQuery("SELECT * FROM vw_Class_Statistics");
   }
 
-  /// متوسط نسبة الحضور عبر كل الأقسام
   static Future<double> getAvgClassRate() async {
     final d = await db;
     final res = await d.rawQuery("""
@@ -138,7 +253,6 @@ class DBHelper {
     return ((res.first['avg_rate'] as num?) ?? 0).toDouble();
   }
 
-  /// عدد الأقسام
   static Future<int> getClassCount() async {
     final d = await db;
     final res = await d.rawQuery("SELECT COUNT(*) AS cnt FROM Classes");
@@ -232,34 +346,6 @@ class DBHelper {
   // ══════════════════════════════════════════════════════════════════════════
   //  SESSIONS
   // ══════════════════════════════════════════════════════════════════════════
-
-  static Future<int> getOrCreateSession({
-    required int timetableId,
-    required String startTime,
-  }) async {
-    final d = await db;
-    final now = DateTime.now();
-    final dateStr =
-        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-
-    final existing = await d.rawQuery(
-      """
-      SELECT session_id FROM Sessions
-      WHERE timetable_id = ? AND session_date = ? AND start_time = ?
-      LIMIT 1
-    """,
-      [timetableId, dateStr, startTime],
-    );
-
-    if (existing.isNotEmpty) return existing.first['session_id'] as int;
-
-    return d.insert("Sessions", {
-      "timetable_id": timetableId,
-      "session_date": dateStr,
-      "start_time": startTime,
-      "status": "Scheduled",
-    });
-  }
 
   static Future<void> updateSessionStatus(int sessionId, String status) async {
     final d = await db;
@@ -443,8 +529,79 @@ class DBHelper {
     );
   }
 
+  static Future<int> insertTimetableSlot({
+    required int classId,
+    required int subjectId,
+    required String dayOfWeek,
+    required String startTime,
+    required String endTime,
+    required String sessionType,
+    String? roomName,
+  }) async {
+    final d = await db;
+
+    // teacher_id مطلوب NOT NULL — نجيب أول معلم في القاعدة
+    final teachers = await d.query("Teachers", limit: 1);
+    if (teachers.isEmpty) throw Exception("No teacher found in database");
+    final teacherId = teachers.first['teacher_id'] as int;
+
+    return d.insert("Teacher_Timetable", {
+      "class_id": classId,
+      "subject_id": subjectId,
+      "teacher_id": teacherId,
+      "day_of_week": dayOfWeek,
+      "start_time": startTime,
+      "end_time": endTime,
+      "session_type": sessionType,
+      "room_name": roomName,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<void> updateTimetableSlot({
+    required int timetableId,
+    required int classId,
+    required int subjectId,
+    required String dayOfWeek,
+    required String startTime,
+    required String endTime,
+    required String sessionType,
+    String? roomName,
+  }) async {
+    final d = await db;
+
+    // teacher_id مطلوب NOT NULL — نجيب أول معلم في القاعدة
+    final teachers = await d.query("Teachers", limit: 1);
+    if (teachers.isEmpty) throw Exception("No teacher found in database");
+    final teacherId = teachers.first['teacher_id'] as int;
+
+    await d.update(
+      "Teacher_Timetable",
+      {
+        "class_id": classId,
+        "subject_id": subjectId,
+        "teacher_id": teacherId,
+        "day_of_week": dayOfWeek,
+        "start_time": startTime,
+        "end_time": endTime,
+        "session_type": sessionType,
+        "room_name": roomName,
+      },
+      where: "timetable_id = ?",
+      whereArgs: [timetableId],
+    );
+  }
+
+  static Future<void> deleteTimetableSlot(int timetableId) async {
+    final d = await db;
+    await d.delete(
+      "Teacher_Timetable",
+      where: "timetable_id = ?",
+      whereArgs: [timetableId],
+    );
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
-  //  SUBJECTS & TEACHERS
+  //  SUBJECTS, TEACHERS & ROOMS
   // ══════════════════════════════════════════════════════════════════════════
 
   static Future<List<Map<String, dynamic>>> getSubjects() async {
@@ -455,6 +612,15 @@ class DBHelper {
   static Future<List<Map<String, dynamic>>> getTeachers() async {
     final d = await db;
     return d.query("Teachers", orderBy: "full_name ASC");
+  }
+
+  static Future<List<Map<String, dynamic>>> getRooms() async {
+    final d = await db;
+    try {
+      return d.query("Rooms", orderBy: "room_name ASC");
+    } catch (_) {
+      return [];
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -474,7 +640,6 @@ class DBHelper {
         final reg = (row['registration_number'] ?? '').toString().trim();
         final fn = (row['first_name'] ?? '').toString().trim();
         final ln = (row['last_name'] ?? '').toString().trim();
-
         if (reg.isEmpty || fn.isEmpty || ln.isEmpty) {
           errors.add('Skipped: $row');
           skipped++;

@@ -10,7 +10,7 @@ import '../app_colors.dart';
 class _StudentRecord {
   final String registrationNumber;
   final String fullName;
-  String status; // Present | Absent | Late | Excused
+  String status;
   int participationScore;
   int disciplineScore;
   int preparationScore;
@@ -80,12 +80,10 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
     super.dispose();
   }
 
-  // ── Load data ─────────────────────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────────────────
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      // ✅ getStudentsByClass من vw_Ordered_Students_By_Class
-      // ✅ getAttendanceForSession يرجع Map<regNum, record>
       final rawStudents = await DBHelper.getStudentsByClass(widget.classId);
       final existing = await DBHelper.getAttendanceForSession(widget.sessionId);
 
@@ -104,7 +102,6 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
         );
       }).toList();
 
-      // ابدأ من أول طالب غير محفوظ
       _currentIndex = _students.indexWhere((s) => !s.saved);
       if (_currentIndex == -1) _currentIndex = _students.length - 1;
 
@@ -159,8 +156,6 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
   Future<void> _finishSession() async {
     setState(() => _saving = true);
     await _saveCurrent();
-
-    // حفظ الطلبة الباقيين بـ Transaction
     await DBHelper.batchUpsertAttendance(
       widget.sessionId,
       _students
@@ -176,9 +171,7 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
           )
           .toList(),
     );
-
     await DBHelper.updateSessionStatus(widget.sessionId, 'Completed');
-
     if (mounted) {
       setState(() => _saving = false);
       Navigator.pop(context);
@@ -231,6 +224,215 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
     }
   }
 
+  // ── قائمة الطلبة — Bottom Sheet ───────────────────────────────────────────
+  void _showStudentList() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (_, scrollController) => Column(
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Row(
+                children: [
+                  Text(
+                    'All Students',
+                    style: GoogleFonts.lexend(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textMain,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const Spacer(),
+                  // إحصاء سريع
+                  _miniStat(
+                    Icons.check_circle,
+                    AppColors.success,
+                    '${_students.where((s) => s.status == 'Present').length}',
+                  ),
+                  const SizedBox(width: 8),
+                  _miniStat(
+                    Icons.cancel,
+                    AppColors.danger,
+                    '${_students.where((s) => s.status == 'Absent').length}',
+                  ),
+                  const SizedBox(width: 8),
+                  _miniStat(
+                    Icons.watch_later,
+                    AppColors.warning,
+                    '${_students.where((s) => s.status == 'Late').length}',
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // القائمة
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                itemCount: _students.length,
+                itemBuilder: (_, i) {
+                  final s = _students[i];
+                  final isCurrent = i == _currentIndex;
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context); // أغلق الـ sheet
+                      _goTo(i); // انتقل للطالب
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isCurrent ? AppColors.primaryBg : AppColors.bg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isCurrent
+                              ? AppColors.primary.withOpacity(0.5)
+                              : AppColors.border,
+                          width: isCurrent ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // رقم الطالب في القائمة
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: isCurrent
+                                  ? AppColors.primary
+                                  : AppColors.divider,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${i + 1}',
+                                style: GoogleFonts.lexend(
+                                  color: isCurrent
+                                      ? Colors.white
+                                      : AppColors.textMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // اسم الطالب
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  s.fullName,
+                                  style: GoogleFonts.lexend(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textMain,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                Text(
+                                  s.registrationNumber,
+                                  style: GoogleFonts.lexend(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // حالة الطالب
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _statusBg(s.status),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _statusIcon(s.status),
+                                  size: 12,
+                                  color: _statusColor(s.status),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  s.status,
+                                  style: GoogleFonts.lexend(
+                                    color: _statusColor(s.status),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // مؤشر "غير محفوظ بعد"
+                          if (!s.saved) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.warning,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _miniStat(IconData icon, Color color, String count) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 14, color: color),
+      const SizedBox(width: 3),
+      Text(
+        count,
+        style: GoogleFonts.lexend(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    ],
+  );
+
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -281,7 +483,10 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
                       const SizedBox(height: 16),
                     ],
                     _notesField(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    // ✅ زر قائمة الطلبة
+                    _studentListButton(),
+                    const SizedBox(height: 16),
                     _navRow(total),
                   ],
                 ),
@@ -312,6 +517,29 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
       ),
     ),
     actions: [
+      // ✅ أيقونة فتح قائمة الطلبة في AppBar
+      IconButton(
+        onPressed: _showStudentList,
+        icon: Stack(
+          children: [
+            const Icon(Icons.people_outline, color: AppColors.textSub),
+            if (_students.where((s) => !s.saved).isNotEmpty)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AppColors.warning,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        tooltip: 'Student list',
+      ),
       if (_saving)
         const Padding(
           padding: EdgeInsets.all(14),
@@ -644,6 +872,74 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
     ),
   );
 
+  // ── زر قائمة الطلبة ───────────────────────────────────────────────────────
+  Widget _studentListButton() {
+    final total = _students.length;
+    final done = _students.where((s) => s.saved).length;
+    final notSaved = total - done;
+
+    return GestureDetector(
+      onTap: _showStudentList,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.people_outline,
+                color: AppColors.primary,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Student List',
+                    style: GoogleFonts.lexend(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textMain,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    notSaved > 0
+                        ? '$done / $total recorded  ·  $notSaved pending'
+                        : 'All $total students recorded',
+                    style: GoogleFonts.lexend(
+                      color: notSaved > 0
+                          ? AppColors.warning
+                          : AppColors.success,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textMuted,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Navigation Row ────────────────────────────────────────────────────────
   Widget _navRow(int total) {
     final isFirst = _currentIndex == 0;
@@ -651,7 +947,6 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
 
     return Row(
       children: [
-        // ✅ Previous — يرجع للطالب السابق لتصحيح الخطأ
         Expanded(
           child: GestureDetector(
             onTap: isFirst ? null : _prev,
@@ -685,7 +980,6 @@ class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
           ),
         ),
         const SizedBox(width: 12),
-        // ✅ Next / Finish
         Expanded(
           child: GestureDetector(
             onTap: isLast ? _finishSession : _next,

@@ -1,14 +1,12 @@
 import 'dart:io';
+import 'package:csv/csv.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../database/db_helper.dart';
 import '../app_colors.dart';
-
-// NOTE: أضف هذه الـ packages في pubspec.yaml:
-//   file_picker: ^8.0.0
-//   csv: ^6.0.0
-//   path_provider: ^2.1.2
-//   share_plus: ^9.0.0
 
 class ImportExportScreen extends StatefulWidget {
   const ImportExportScreen({super.key});
@@ -54,129 +52,92 @@ class _ImportExportScreenState extends State<ImportExportScreen>
     setState(() => _classes = data);
   }
 
-  // ── Import ────────────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  //  IMPORT
+  // ══════════════════════════════════════════════════════════════════════════
 
   Future<void> _pickFile() async {
-    // Requires file_picker package — uncomment when available:
-    //
-    // final result = await FilePicker.platform.pickFiles(
-    //   type: FileType.custom,
-    //   allowedExtensions: ['csv', 'xlsx'],
-    // );
-    // if (result == null) return;
-    // final ext  = result.files.single.extension ?? 'csv';
-    // final path = result.files.single.path!;
-    // _parseCSV(File(path));
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+      );
+      if (result == null || result.files.isEmpty) return;
 
-    _showFormatSheet();
+      final path = result.files.single.path;
+      if (path == null) {
+        _showSnack('Could not read file path', isError: true);
+        return;
+      }
+
+      await _parseCSV(File(path));
+    } catch (e) {
+      _showSnack('Error picking file: $e', isError: true);
+    }
   }
 
-  void _showFormatSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'CSV Format Required',
-              style: GoogleFonts.lexend(
-                fontWeight: FontWeight.bold,
-                color: AppColors.textMain,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'registration_number,first_name,last_name\n'
-                '252535649116,ABI,NORELHOUDA\n'
-                '242535683703,ALI,MERYEM',
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  color: AppColors.textMuted,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _infoRow(
-              Icons.check_circle_outline,
-              AppColors.success,
-              'First row = header',
-            ),
-            _infoRow(
-              Icons.check_circle_outline,
-              AppColors.success,
-              'Columns: registration_number, first_name, last_name',
-            ),
-            _infoRow(
-              Icons.info_outline,
-              AppColors.warning,
-              'Duplicates are skipped automatically',
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                onPressed: () {
-                  Navigator.pop(context);
-                  _loadDemoPreview();
-                },
-                child: Text(
-                  'Load Demo Preview',
-                  style: GoogleFonts.lexend(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Future<void> _parseCSV(File file) async {
+    try {
+      final content = await file.readAsString();
+      final rows = const CsvToListConverter(eol: '\n').convert(content);
 
-  void _loadDemoPreview() {
-    setState(() {
-      _previewRows = [
-        {
-          'registration_number': '252535000001',
-          'first_name': 'DEMO',
-          'last_name': 'STUDENT_A',
-        },
-        {
-          'registration_number': '252535000002',
-          'first_name': 'DEMO',
-          'last_name': 'STUDENT_B',
-        },
-        {
-          'registration_number': '252535649116',
-          'first_name': 'ABI',
-          'last_name': 'NORELHOUDA',
-        },
-      ];
-      _previewErrors = [];
-      _importResult = null;
-    });
+      if (rows.isEmpty) {
+        _showSnack('File is empty', isError: true);
+        return;
+      }
+
+      // أول سطر = header
+      final header = rows.first.map((e) => e.toString().trim()).toList();
+
+      final regIdx = header.indexOf('registration_number');
+      final fnIdx = header.indexOf('first_name');
+      final lnIdx = header.indexOf('last_name');
+
+      if (regIdx == -1 || fnIdx == -1 || lnIdx == -1) {
+        _showSnack(
+          'Missing columns: registration_number, first_name, last_name',
+          isError: true,
+        );
+        return;
+      }
+
+      final parsed = <Map<String, dynamic>>[];
+      final errors = <String>[];
+
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.length <= lnIdx) {
+          errors.add('Row $i: not enough columns');
+          continue;
+        }
+        final reg = row[regIdx].toString().trim();
+        final fn = row[fnIdx].toString().trim();
+        final ln = row[lnIdx].toString().trim();
+
+        if (reg.isEmpty || fn.isEmpty || ln.isEmpty) {
+          errors.add('Row $i: empty required field');
+          continue;
+        }
+
+        parsed.add({
+          'registration_number': reg,
+          'first_name': fn,
+          'last_name': ln,
+        });
+      }
+
+      setState(() {
+        _previewRows = parsed;
+        _previewErrors = errors;
+        _importResult = null;
+      });
+
+      if (parsed.isEmpty) {
+        _showSnack('No valid rows found in file', isError: true);
+      }
+    } catch (e) {
+      _showSnack('Parse error: $e', isError: true);
+    }
   }
 
   Future<void> _confirmImport() async {
@@ -195,7 +156,6 @@ class _ImportExportScreenState extends State<ImportExportScreen>
     });
 
     try {
-      // ✅ DBHelper.importStudents (signature: rows, classId)
       final result = await DBHelper.importStudents(
         _previewRows,
         _selectedClassId!,
@@ -205,7 +165,7 @@ class _ImportExportScreenState extends State<ImportExportScreen>
       final errors = result['errors'] as List<String>;
 
       setState(() {
-        _importSuccess = errors.isEmpty || inserted > 0;
+        _importSuccess = inserted > 0 || errors.isEmpty;
         _importResult = '$inserted imported · $skipped skipped';
         _previewErrors = errors.take(5).toList();
         _previewRows = [];
@@ -220,15 +180,17 @@ class _ImportExportScreenState extends State<ImportExportScreen>
     }
   }
 
-  // ── Export ────────────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  //  EXPORT
+  // ══════════════════════════════════════════════════════════════════════════
 
   Future<void> _doExport() async {
     setState(() {
       _exporting = true;
       _exportResult = null;
     });
+
     try {
-      // ✅ getAttendanceExportData (classId optional)
       final rows = await DBHelper.getAttendanceExportData(
         classId: _exportClassId,
       );
@@ -241,39 +203,139 @@ class _ImportExportScreenState extends State<ImportExportScreen>
         return;
       }
 
-      // بناء CSV
-      final header =
-          'registration_number,student_name,class_name,'
-          'subject,session_type,session_date,start_time,'
-          'status,notes,participation,discipline,preparation';
+      // بناء البيانات المشتركة بين كل الصيغ
+      final headers = [
+        'registration_number',
+        'student_name',
+        'class_name',
+        'subject',
+        'session_type',
+        'session_date',
+        'start_time',
+        'status',
+        'notes',
+        'participation',
+        'discipline',
+        'preparation',
+      ];
 
-      final lines = rows.map(
-        (r) =>
-            '"${r['registration_number']}",'
-            '"${r['student_name']}",'
-            '"${r['class_name']}",'
-            '"${r['subject_shortname']}",'
-            '"${r['session_type']}",'
-            '"${r['session_date']}",'
-            '"${r['start_time']}",'
-            '"${r['status']}",'
-            '"${(r['notes'] ?? '').toString().replaceAll('"', "'")}",'
-            '${r['participation_score'] ?? 0},'
-            '${r['discipline_score'] ?? 0},'
-            '${r['preparation_score'] ?? 0}',
-      );
+      final dataRows = rows
+          .map(
+            (r) => [
+              r['registration_number']?.toString() ?? '',
+              r['student_name']?.toString() ?? '',
+              r['class_name']?.toString() ?? '',
+              r['subject_shortname']?.toString() ?? '',
+              r['session_type']?.toString() ?? '',
+              r['session_date']?.toString() ?? '',
+              r['start_time']?.toString() ?? '',
+              r['status']?.toString() ?? '',
+              (r['notes'] ?? '').toString().replaceAll('"', "'"),
+              (r['participation_score'] ?? 0).toString(),
+              (r['discipline_score'] ?? 0).toString(),
+              (r['preparation_score'] ?? 0).toString(),
+            ],
+          )
+          .toList();
 
-      final csv = '$header\n${lines.join('\n')}';
+      final dir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      late File file;
 
-      // حفظ الملف (يحتاج path_provider + share_plus):
-      // final dir  = await getTemporaryDirectory();
-      // final file = File('${dir.path}/attendance_export.csv');
-      // await file.writeAsString(csv);
-      // await Share.shareXFiles([XFile(file.path)], text: 'Attendance Export');
+      if (_exportFormat == 'CSV') {
+        // ── CSV ────────────────────────────────────────────────────────────
+        final csvData = [headers, ...dataRows];
+        final csv = const ListToCsvConverter().convert(csvData);
+        file = File('${dir.path}/attendance_$timestamp.csv');
+        await file.writeAsString(csv);
+      } else if (_exportFormat == 'Excel') {
+        // ── Excel (TSV يفتح مباشرة في Excel) ──────────────────────────────
+        final buffer = StringBuffer();
+        buffer.writeln(headers.join('\t'));
+        for (final row in dataRows) {
+          buffer.writeln(row.map((c) => c.replaceAll('\t', ' ')).join('\t'));
+        }
+        file = File('${dir.path}/attendance_$timestamp.tsv');
+        await file.writeAsString(buffer.toString());
+      } else {
+        // ── PDF (HTML → نص منسق قابل للمشاركة) ───────────────────────────
+        final buffer = StringBuffer();
+        buffer.writeln('ATTENDANCE REPORT');
+        buffer.writeln(
+          'Generated: ${DateTime.now().toString().substring(0, 16)}',
+        );
+        buffer.writeln('Records: ${rows.length}');
+        buffer.writeln('=' * 60);
+        buffer.writeln(headers.join(' | '));
+        buffer.writeln('-' * 60);
+        for (final row in dataRows) {
+          buffer.writeln(row.join(' | '));
+        }
+        file = File('${dir.path}/attendance_$timestamp.txt');
+        await file.writeAsString(buffer.toString());
+      }
+
+      // ── Share ───────────────────────────────────────────────────────────────
+      try {
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: 'Attendance Export',
+          text: 'Attendance data — ${rows.length} records',
+        );
+      } catch (_) {
+        // fallback: نعرض مسار الملف للمستخدم
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                'File Saved',
+                style: GoogleFonts.lexend(fontWeight: FontWeight.bold),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${rows.length} records exported successfully.',
+                    style: GoogleFonts.lexend(fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SelectableText(
+                      file.path,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'OK',
+                    style: GoogleFonts.lexend(color: AppColors.primary),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      }
 
       setState(() {
-        _exportResult =
-            'Ready · ${rows.length} records\n(Add share_plus to enable file sharing)';
+        _exportResult = '${rows.length} records exported as $_exportFormat';
         _exporting = false;
       });
     } catch (e) {
@@ -284,7 +346,9 @@ class _ImportExportScreenState extends State<ImportExportScreen>
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  //  BUILD
+  // ══════════════════════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -329,15 +393,15 @@ class _ImportExportScreenState extends State<ImportExportScreen>
     );
   }
 
-  // ── Import Tab ────────────────────────────────────────────────────────────
+  // ── Import Tab ─────────────────────────────────────────────────────────────
   Widget _buildImportTab() => ListView(
     padding: const EdgeInsets.all(20),
     children: [
-      // Step 1
+      // Step 1 — اختيار الملف
       _stepCard(
         step: '1',
-        title: 'Choose File',
-        subtitle: 'CSV or XLSX with student data',
+        title: 'Choose CSV File',
+        subtitle: 'Columns: registration_number, first_name, last_name',
         child: GestureDetector(
           onTap: _pickFile,
           child: Container(
@@ -357,7 +421,7 @@ class _ImportExportScreenState extends State<ImportExportScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Tap to pick CSV / XLSX',
+                  'Tap to pick CSV file',
                   style: GoogleFonts.lexend(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w600,
@@ -377,7 +441,7 @@ class _ImportExportScreenState extends State<ImportExportScreen>
       ),
       const SizedBox(height: 16),
 
-      // Step 2
+      // Step 2 — اختيار القسم
       _stepCard(
         step: '2',
         title: 'Select Class',
@@ -386,7 +450,7 @@ class _ImportExportScreenState extends State<ImportExportScreen>
       ),
       const SizedBox(height: 16),
 
-      // Step 3: Preview
+      // Step 3 — Preview
       if (_previewRows.isNotEmpty)
         _stepCard(
           step: '3',
@@ -413,6 +477,7 @@ class _ImportExportScreenState extends State<ImportExportScreen>
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
+                height: 48,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -444,7 +509,7 @@ class _ImportExportScreenState extends State<ImportExportScreen>
           ),
         ),
 
-      // Result
+      // نتيجة الاستيراد
       if (_importResult != null) ...[
         const SizedBox(height: 16),
         Container(
@@ -484,10 +549,11 @@ class _ImportExportScreenState extends State<ImportExportScreen>
     ],
   );
 
-  // ── Export Tab ────────────────────────────────────────────────────────────
+  // ── Export Tab ─────────────────────────────────────────────────────────────
   Widget _buildExportTab() => ListView(
     padding: const EdgeInsets.all(20),
     children: [
+      // Step 1 — فلتر اختياري
       _stepCard(
         step: '1',
         title: 'Filter (optional)',
@@ -500,6 +566,7 @@ class _ImportExportScreenState extends State<ImportExportScreen>
       ),
       const SizedBox(height: 16),
 
+      // Step 2 — صيغة التصدير
       _stepCard(
         step: '2',
         title: 'Export Format',
@@ -552,6 +619,7 @@ class _ImportExportScreenState extends State<ImportExportScreen>
       ),
       const SizedBox(height: 16),
 
+      // زر التصدير
       SizedBox(
         width: double.infinity,
         height: 52,
@@ -585,24 +653,42 @@ class _ImportExportScreenState extends State<ImportExportScreen>
         ),
       ),
 
+      // نتيجة التصدير
       if (_exportResult != null) ...[
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.successBg,
+            color: _exportResult!.contains('failed')
+                ? AppColors.dangerBg
+                : AppColors.successBg,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.success.withOpacity(0.3)),
+            border: Border.all(
+              color:
+                  (_exportResult!.contains('failed')
+                          ? AppColors.danger
+                          : AppColors.success)
+                      .withOpacity(0.3),
+            ),
           ),
           child: Row(
             children: [
-              const Icon(Icons.check_circle_outline, color: AppColors.success),
+              Icon(
+                _exportResult!.contains('failed')
+                    ? Icons.error_outline
+                    : Icons.check_circle_outline,
+                color: _exportResult!.contains('failed')
+                    ? AppColors.danger
+                    : AppColors.success,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   _exportResult!,
                   style: GoogleFonts.lexend(
-                    color: AppColors.success,
+                    color: _exportResult!.contains('failed')
+                        ? AppColors.danger
+                        : AppColors.success,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -613,6 +699,8 @@ class _ImportExportScreenState extends State<ImportExportScreen>
       ],
 
       const SizedBox(height: 24),
+
+      // معلومات التصدير
       Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -657,7 +745,10 @@ class _ImportExportScreenState extends State<ImportExportScreen>
     ],
   );
 
-  // ── Shared helpers ────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  //  SHARED WIDGETS
+  // ══════════════════════════════════════════════════════════════════════════
+
   Widget _stepCard({
     required String step,
     required String title,
@@ -745,7 +836,7 @@ class _ImportExportScreenState extends State<ImportExportScreen>
             style: GoogleFonts.lexend(color: AppColors.textMuted, fontSize: 13),
           ),
           style: GoogleFonts.lexend(color: AppColors.textMain, fontSize: 13),
-          icon: const Icon(Icons.expand_more, color: Color(0xFF94A3B8)),
+          icon: const Icon(Icons.expand_more, color: AppColors.textMuted),
           items: _classes
               .map(
                 (c) => DropdownMenuItem<int>(

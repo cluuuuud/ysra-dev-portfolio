@@ -1,54 +1,30 @@
 import 'package:flutter/material.dart';
 
-/// ألوان موحّدة مع شاشة التعريف — خلفية بيضاء وهادئة.
+// ═══════════════════════════════════════════════════════════
+//  AppColors — ألوان موحّدة لكل الشاشات
+//  استخدم: import '../app_colors.dart';
+// ═══════════════════════════════════════════════════════════
 class AppColors {
-  AppColors._();
-
-  static const Color bg = Color(0xFFFFFFFF);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color border = Color(0xFFE5E7EB);
-  static const Color divider = Color(0xFFF3F4F6);
-  static const Color primary = Color(0xFF2A7BF1);
-  static const Color primaryBg = Color(0xFFEFF6FF);
-  static const Color textMain = Color(0xFF1F2937);
-  static const Color textSub = Color(0xFF4B5563);
-  static const Color textMuted = Color(0xFF6B7280);
-  static const Color success = Color(0xFF059669);
-  static const Color successBg = Color(0xFFECFDF5);
-  static const Color warning = Color(0xFFB45309);
-  static const Color warningBg = Color(0xFFFFFBEB);
-  static const Color danger = Color(0xFFC2410C);
-  static const Color dangerBg = Color(0xFFFFF7ED);
-  static const Color purple = Color(0xFF6D28D9);
-  static const Color purpleBg = Color(0xFFF5F3FF);
-
-  static Color statusColor(String? s) {
-    switch (s) {
-      case 'Present':
-        return success;
-      case 'Absent':
-        return danger;
-      case 'Late':
-        return warning;
-      case 'Excused':
-        return purple;
-      default:
-        return textMuted;
-    }
-  }
-
-  static Color statusBg(String? s) {
-    switch (s) {
-      case 'Present':
-        return successBg;
-      case 'Absent':
-        return dangerBg;
-      case 'Late':
-        return warningBg;
-      case 'Excused':
-        return purpleBg;
-      default:
-        return divider;
-    }
-  }
+  // Backgrounds
+  static const bg = Color(0xFFF8FAFC);
+  static const surface = Colors.white;
+  static const divider = Color(0xFFF1F5F9);
+  // Primary (Indigo / Blue)
+  static const primary = Color(0xFF2A7BF1);
+  static const primaryBg = Color(0xFFEFF6FF);
+  // Success (Green)
+  static const success = Color(0xFF16A34A);
+  static const successBg = Color(0xFFDCFCE7);
+  // Warning (Amber)
+  static const warning = Color(0xFFD97706);
+  static const warningBg = Color(0xFFFEF3C7);
+  // Danger (Red)
+  static const danger = Color(0xFFDC2626);
+  static const dangerBg = Color(0xFFFEE2E2);
+  // Text
+  static const textMain = Color(0xFF0F172A);
+  static const textSub = Color(0xFF475569);
+  static const textMuted = Color(0xFF94A3B8);
+  // Border
+  static const border = Color(0xFFE2E8F0);
 }

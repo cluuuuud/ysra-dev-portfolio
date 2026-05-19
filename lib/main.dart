@@ -13,6 +13,9 @@ import 'package:attendance_app/screens/today_sessions_screen.dart';
 import 'package:attendance_app/screens/management_screen.dart';
 import 'package:attendance_app/screens/splash_screen.dart';
 
+/// Global notifier — أي شاشة تقدر تستعملو
+final themeModeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
+
 void main() {
   runApp(const AttendixApp());
 }
@@ -22,47 +25,62 @@ class AttendixApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'ATTENDIX',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2A7BF1)),
-        useMaterial3: true,
-        fontFamily: 'Lexend',
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (_, mode, __) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'ATTENDIX',
+        themeMode: mode,
+
+        // ── Light theme ────────────────────────────────────────────────────
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF2A7BF1),
+            brightness: Brightness.light,
+          ),
+          useMaterial3: true,
+          fontFamily: 'Lexend',
+          scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        ),
+
+        // ── Dark theme ─────────────────────────────────────────────────────
+        darkTheme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF2A7BF1),
+            brightness: Brightness.dark,
+          ),
+          useMaterial3: true,
+          fontFamily: 'Lexend',
+          scaffoldBackgroundColor: const Color(0xFF0F172A),
+        ),
+
+        initialRoute: '/splash',
+        routes: {
+          '/splash': (_) => const SplashScreen(),
+          '/': (_) => const OnboardingScreen(),
+          '/login': (_) => const LoginScreen(),
+          '/dashboard': (_) => const DashboardScreen(),
+          '/attendance': (_) => const AttendanceListScreen(),
+          '/settings': (_) => const SettingScreen(),
+          '/profile': (_) => const ProfileScreen(),
+          '/history': (_) => const SessionHistoryScreen(),
+          '/import-export': (_) => const ImportExportScreen(),
+          '/timetable': (_) => const TimetableScreen(),
+          '/today_sessions': (_) => const TodaySessionsScreen(),
+          '/management': (_) => const ManagementScreen(),
+        },
+        onGenerateRoute: (settings) {
+          if (settings.name == '/session_details') {
+            final id = settings.arguments;
+            final sid = id is int ? id : int.tryParse('$id');
+            if (sid == null) return null;
+            return MaterialPageRoute(
+              builder: (_) => SessionDetailsScreen(sessionId: sid),
+            );
+          }
+          return null;
+        },
       ),
-
-      // ── أول شاشة تظهر: Splash ──────────────────────────────────────────
-      initialRoute: '/splash',
-
-      routes: {
-        '/splash': (context) => const SplashScreen(),
-        '/': (context) => const OnboardingScreen(),
-        '/login': (context) => const LoginScreen(),
-        '/dashboard': (context) => const DashboardScreen(),
-        '/attendance': (context) => const AttendanceListScreen(),
-        '/settings': (context) => const SettingScreen(), // ✅ SettingScreen
-        '/profile': (context) => const ProfileScreen(),
-        '/history': (context) => const SessionHistoryScreen(),
-        '/import-export': (context) =>
-            const ImportExportScreen(), // ✅ ImportExportScreen
-        '/timetable': (context) => const TimetableScreen(),
-        '/today_sessions': (context) => const TodaySessionsScreen(),
-        '/management': (context) =>
-            const ManagementScreen(), // ✅ ManagementScreen
-      },
-
-      // ── Routes with arguments ─────────────────────────────────────────────
-      onGenerateRoute: (settings) {
-        if (settings.name == '/session_details') {
-          final id = settings.arguments;
-          final sid = id is int ? id : int.tryParse('$id');
-          if (sid == null) return null;
-          return MaterialPageRoute(
-            builder: (_) => SessionDetailsScreen(sessionId: sid),
-          );
-        }
-        return null;
-      },
     );
   }
 }
