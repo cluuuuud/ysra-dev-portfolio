@@ -26,20 +26,13 @@ class SheetsExportService {
     }
   }
 
-  // ✅ CHANGE THIS: Replace with YOUR spreadsheet ID
   Future<bool> exportAttendanceToSheets(
-    String sessionId,
+    String spreadsheetId,
     List<Map<String, dynamic>> attendanceData,
   ) async {
     try {
       final sheetsApi = await getSheetsApi();
       if (sheetsApi == null) return false;
-
-      // 🔴 YOU MUST CHANGE THIS - Get YOUR spreadsheet ID
-      // Your spreadsheet ID is in the Google Sheets URL:
-      // https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID_HERE/edit
-      final String yourSpreadsheetId =
-          "1Jsyl7CLtTJJJ0VTCtYuVYihhkEKdvdKDIqyz8yQgt4w"; // ← REPLACE THIS
 
       // Prepare data rows
       List<List<dynamic>> values = [
@@ -61,7 +54,7 @@ class SheetsExportService {
 
       await sheetsApi.spreadsheets.values.update(
         valueRange,
-        yourSpreadsheetId, // ← USES YOUR ID HERE
+        spreadsheetId,
         'Sheet1!A1',
         valueInputOption: 'USER_ENTERED',
       );

@@ -6,191 +6,666 @@ import 'package:sqflite/sqflite.dart';
 class DBHelper {
   static Database? _db;
 
-  // =========================
-  // 🔹 INIT DB
-  // =========================
   static Future<Database> get db async {
-    if (_db != null) return _db!;
-    _db = await initDb();
+    _db ??= await _initDb();
     return _db!;
   }
 
-  static Future<Database> initDb() async {
-    String path = join(await getDatabasesPath(), 'db_attendance_v2.db');
-
-    bool exists = await databaseExists(path);
-
+  static Future<Database> _initDb() async {
+    final path = join(await getDatabasesPath(), 'dbv5.db');
+    final exists = await databaseExists(path);
     if (!exists) {
-      ByteData data = await rootBundle.load(
-        'assets/database/db_attendance_v2.db',
-      );
-
-      List<int> bytes = data.buffer.asUint8List(
+      final data = await rootBundle.load('assets/database/dbv5.db');
+      final bytes = data.buffer.asUint8List(
         data.offsetInBytes,
         data.lengthInBytes,
       );
-
       await File(path).writeAsBytes(bytes, flush: true);
     }
-
-    return await openDatabase(path);
+    return openDatabase(path);
   }
 
-  // =========================
-  // ✅ CLASSES
-  // =========================
+  // ══════════════════════════════════════════════════════════════════════════
+  //  ATTENDANCE FLOW
+  // ══════════════════════════════════════════════════════════════════════════
+
+  static Future<List<Map<String, dynamic>>> getTodayTimetableSlots() async {
+    final d = await db;
+    const dayNames = {
+      1: 'Monday',
+      2: 'Tuesday',
+      3: 'Wednesday',
+      4: 'Thursday',
+      5: 'Friday',
+      6: 'Saturday',
+      7: 'Sunday',
+    };
+    final todayName = dayNames[DateTime.now().weekday] ?? 'Monday';
+    return d.rawQuery(
+      """
+      SELECT
+        tt.timetable_id,
+        tt.day_of_week,
+        tt.start_time,
+        tt.end_time,
+        tt.session_type,
+        tt.room_name,
+        sub.subject_shortname,
+        sub.subject_name,
+        sub.subject_id
+      FROM Teacher_Timetable tt
+      JOIN Subjects sub ON tt.subject_id = sub.subject_id
+      WHERE tt.day_of_week = ?
+      ORDER BY tt.start_time ASC
+    """,
+      [todayName],
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> getClassesByTimetableId(
+    int timetableId,
+  ) async {
+    final d = await db;
+    return d.rawQuery(
+      """
+      SELECT DISTINCT
+        c.class_id,
+        c.class_name,
+        c.unilevel,
+        c.academic_year,
+        c.session_type,
+        tt.timetable_id,
+        tt.start_time,
+        tt.end_time,
+        tt.room_name
+      FROM Teacher_Timetable tt
+      JOIN Classes c ON tt.class_id = c.class_id
+      WHERE tt.timetable_id = ?
+      ORDER BY c.class_name ASC
+    """,
+      [timetableId],
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> getClassesForSlot({
+    required int subjectId,
+    required String dayOfWeek,
+    required String startTime,
+  }) async {
+    final d = await db;
+    return d.rawQuery(
+      """
+      SELECT
+        c.class_id,
+        c.class_name,
+        c.unilevel,
+        c.academic_year,
+        c.session_type,
+        tt.timetable_id,
+        tt.start_time,
+        tt.end_time,
+        tt.room_name,
+        (SELECT COUNT(*) FROM Student_Enrollment se WHERE se.class_id = c.class_id) AS student_count
+      FROM Teacher_Timetable tt
+      JOIN Classes c ON tt.class_id = c.class_id
+      WHERE tt.subject_id  = ?
+        AND tt.day_of_week = ?
+        AND tt.start_time  = ?
+      ORDER BY c.class_name ASC
+    """,
+      [subjectId, dayOfWeek, startTime],
+    );
+  }
+
+  static Future<int> getOrCreateSession({
+    required int timetableId,
+    required String startTime,
+  }) async {
+    final d = await db;
+    final now = DateTime.now();
+    final dateStr =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    final existing = await d.rawQuery(
+      """
+      SELECT session_id FROM Sessions
+      WHERE timetable_id = ? AND session_date = ? AND start_time = ?
+      LIMIT 1
+    """,
+      [timetableId, dateStr, startTime],
+    );
+
+    if (existing.isNotEmpty) return existing.first['session_id'] as int;
+
+    return d.insert("Sessions", {
+      "timetable_id": timetableId,
+      "session_date": dateStr,
+      "start_time": startTime,
+      "status": "Scheduled",
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  DASHBOARD
+  // ══════════════════════════════════════════════════════════════════════════
+
+  static Future<List<Map<String, dynamic>>> getTodaySessions() async {
+    final d = await db;
+    return d.rawQuery("""
+      SELECT * FROM vw_Session_Details
+      WHERE session_date = DATE('now')
+      ORDER BY start_time ASC
+    """);
+  }
+
+  static Future<Map<String, dynamic>?> getNextSession() async {
+    final d = await db;
+    final res = await d.rawQuery("""
+      SELECT * FROM vw_Session_Details
+      WHERE session_status = 'Scheduled'
+        AND (
+          session_date > DATE('now')
+          OR (session_date = DATE('now') AND start_time > TIME('now'))
+        )
+      ORDER BY session_date ASC, start_time ASC
+      LIMIT 1
+    """);
+    return res.isNotEmpty ? res.first : null;
+  }
+
+  static Future<Map<String, dynamic>?> getCurrentSession() async {
+    final d = await db;
+    final res = await d.rawQuery("""
+      SELECT * FROM vw_Session_Details
+      WHERE session_date = DATE('now')
+        AND TIME('now') BETWEEN start_time AND end_time
+      LIMIT 1
+    """);
+    return res.isNotEmpty ? res.first : null;
+  }
+
+  static Future<Map<String, dynamic>?> getLastCompletedSession() async {
+    final d = await db;
+    final res = await d.rawQuery("""
+      SELECT * FROM vw_Session_Details
+      WHERE session_status = 'Completed'
+      ORDER BY session_date DESC, start_time DESC
+      LIMIT 1
+    """);
+    return res.isNotEmpty ? res.first : null;
+  }
+
+  static Future<double> getWeeklyAttendanceRate() async {
+    final d = await db;
+    final res = await d.rawQuery("""
+      SELECT ROUND(
+        100.0 * SUM(CASE WHEN a.status IN ('Present','Late') THEN 1 ELSE 0 END)
+        / NULLIF(COUNT(a.attendance_id), 0), 1
+      ) AS rate
+      FROM Attendance a
+      JOIN Sessions s ON a.session_id = s.session_id
+      WHERE s.session_date BETWEEN DATE('now','-6 days') AND DATE('now')
+    """);
+    if (res.isEmpty) return 0;
+    return ((res.first['rate'] as num?) ?? 0).toDouble();
+  }
+
+  static Future<List<Map<String, dynamic>>> getRecentSessions({
+    int limit = 5,
+  }) async {
+    final d = await db;
+    return d.rawQuery("SELECT * FROM vw_Recent_Sessions LIMIT ?", [limit]);
+  }
+
+  static Future<int> getAtRiskCount() async {
+    final d = await db;
+    try {
+      final res = await d.rawQuery(
+        "SELECT COUNT(*) AS cnt FROM vw_At_Risk_Students",
+      );
+      return (res.first['cnt'] as int?) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getAtRiskStudents() async {
+    final d = await db;
+    try {
+      return d.rawQuery("SELECT * FROM vw_At_Risk_Students");
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getClassStatistics() async {
+    final d = await db;
+    return d.rawQuery("SELECT * FROM vw_Class_Statistics");
+  }
+
+  static Future<double> getAvgClassRate() async {
+    final d = await db;
+    final res = await d.rawQuery("""
+      SELECT ROUND(AVG(class_attendance_rate), 1) AS avg_rate
+      FROM vw_Class_Statistics
+    """);
+    if (res.isEmpty) return 0;
+    return ((res.first['avg_rate'] as num?) ?? 0).toDouble();
+  }
+
+  static Future<int> getClassCount() async {
+    final d = await db;
+    final res = await d.rawQuery("SELECT COUNT(*) AS cnt FROM Classes");
+    return (res.first['cnt'] as int?) ?? 0;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  CLASSES
+  // ══════════════════════════════════════════════════════════════════════════
 
   static Future<List<Map<String, dynamic>>> getClasses() async {
-    final dbClient = await db;
-    return await dbClient.query("Classes");
+    final d = await db;
+    return d.query("Classes", orderBy: "class_name ASC");
   }
 
-  static Future<int> insertClass(String name) async {
-    final dbClient = await db;
-    return await dbClient.insert("Classes", {"class_name": name});
+  static Future<int> insertClass({
+    required String className,
+    required String unilevel,
+    required String academicYear,
+    String sessionType = 'TD',
+  }) async {
+    final d = await db;
+    return d.insert("Classes", {
+      "class_name": className,
+      "unilevel": unilevel,
+      "academic_year": academicYear,
+      "session_type": sessionType,
+    });
   }
 
-  // =========================
-  // ✅ STUDENTS
-  // =========================
+  // ══════════════════════════════════════════════════════════════════════════
+  //  STUDENTS
+  // ══════════════════════════════════════════════════════════════════════════
 
   static Future<List<Map<String, dynamic>>> getStudentsByClass(
     int classId,
   ) async {
-    final dbClient = await db;
-
-    return await dbClient.query(
-      "Students",
-      where: "class_id = ?",
-      whereArgs: [classId],
+    final d = await db;
+    return d.rawQuery(
+      "SELECT * FROM vw_Ordered_Students_By_Class WHERE class_id = ?",
+      [classId],
     );
   }
 
-  static Future<int> insertStudent(String name, int classId) async {
-    final dbClient = await db;
-
-    return await dbClient.insert("Students", {
-      "student_name": name,
-      "class_id": classId,
-    });
+  static Future<int> insertStudent({
+    required String registrationNumber,
+    required String firstName,
+    required String lastName,
+    String? email,
+    String? phone,
+    String? dateOfBirth,
+  }) async {
+    final d = await db;
+    return d.insert("Students", {
+      "registration_number": registrationNumber,
+      "first_name": firstName,
+      "last_name": lastName,
+      "email": email ?? 'student@univ-msila.dz',
+      "phone": phone,
+      "date_of_birth": dateOfBirth,
+      "status": 'active',
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
-  // =========================
-  // ✅ SESSIONS
-  // =========================
-
-  static Future<int> insertSession(int classId) async {
-    final dbClient = await db;
-
-    return await dbClient.insert("Sessions", {
+  static Future<void> enrollStudent(String regNumber, int classId) async {
+    final d = await db;
+    await d.insert("Student_Enrollment", {
+      "registration_number": regNumber,
       "class_id": classId,
-      "session_date": DateTime.now().toString(),
-    });
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  static Future<void> insertStudentWithEnrollment({
+    required String registrationNumber,
+    required String firstName,
+    required String lastName,
+    required int classId,
+    String? email,
+    String? phone,
+  }) async {
+    await insertStudent(
+      registrationNumber: registrationNumber,
+      firstName: firstName,
+      lastName: lastName,
+      email: email,
+      phone: phone,
+    );
+    await enrollStudent(registrationNumber, classId);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  SESSIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  static Future<void> updateSessionStatus(int sessionId, String status) async {
+    final d = await db;
+    await d.update(
+      "Sessions",
+      {"status": status},
+      where: "session_id = ?",
+      whereArgs: [sessionId],
+    );
   }
 
   static Future<List<Map<String, dynamic>>> getSessions() async {
-    final dbClient = await db;
-
-    return await dbClient.rawQuery('''
-      SELECT
-        Sessions.session_id,
-        Sessions.session_date,
-        Classes.class_name
-      FROM Sessions
-      JOIN Classes
-      ON Sessions.class_id = Classes.class_id
-      ORDER BY Sessions.session_id DESC
-    ''');
+    final d = await db;
+    return d.rawQuery(
+      "SELECT * FROM vw_Session_Details ORDER BY session_date DESC, start_time DESC",
+    );
   }
 
-  // =========================
-  // ✅ ATTENDANCE
-  // =========================
+  static Future<Map<String, dynamic>?> getSessionDetails(int sessionId) async {
+    final d = await db;
+    final res = await d.rawQuery(
+      "SELECT * FROM vw_Session_Details WHERE session_id = ?",
+      [sessionId],
+    );
+    return res.isNotEmpty ? res.first : null;
+  }
 
-  static Future<void> insertAttendance(
+  // ══════════════════════════════════════════════════════════════════════════
+  //  ATTENDANCE
+  // ══════════════════════════════════════════════════════════════════════════
+
+  static Future<void> upsertAttendance({
+    required int sessionId,
+    required String registrationNumber,
+    required String status,
+    int participationScore = 0,
+    int disciplineScore = 0,
+    int preparationScore = 0,
+    String? notes,
+  }) async {
+    final d = await db;
+    await d.insert("Attendance", {
+      "session_id": sessionId,
+      "registration_number": registrationNumber,
+      "status": status,
+      "participation_score": participationScore,
+      "discipline_score": disciplineScore,
+      "preparation_score": preparationScore,
+      "notes": notes,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<void> batchUpsertAttendance(
     int sessionId,
     List<Map<String, dynamic>> students,
   ) async {
-    final dbClient = await db;
-
-    for (var s in students) {
-      await dbClient.insert("Attendance", {
-        "session_id": sessionId,
-        "student_id": s["id"],
-        "status": s["status"],
-      });
-    }
+    final d = await db;
+    await d.transaction((txn) async {
+      for (final s in students) {
+        await txn.insert("Attendance", {
+          "session_id": sessionId,
+          "registration_number": s['registration_number'],
+          "status": s['status'],
+          "participation_score": s['participation_score'] ?? 0,
+          "discipline_score": s['discipline_score'] ?? 0,
+          "preparation_score": s['preparation_score'] ?? 0,
+          "notes": s['notes'],
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
   }
 
-  static Future<Map<String, int>> getAttendanceCount(int sessionId) async {
-    final dbClient = await db;
-
-    final result = await dbClient.rawQuery(
-      '''
-      SELECT
-        SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) as present,
-        SUM(CASE WHEN status = 'Absent' THEN 1 ELSE 0 END) as absent
-      FROM Attendance
-      WHERE session_id = ?
-    ''',
+  static Future<Map<String, Map<String, dynamic>>> getAttendanceForSession(
+    int sessionId,
+  ) async {
+    final d = await db;
+    final res = await d.rawQuery(
+      "SELECT * FROM Attendance WHERE session_id = ?",
       [sessionId],
     );
-
     return {
-      "present": (result[0]["present"] ?? 0) as int,
-      "absent": (result[0]["absent"] ?? 0) as int,
+      for (final r in res) r['registration_number'] as String: Map.from(r),
     };
   }
 
-  static Future<List<Map<String, dynamic>>> getStudentsBySession(
+  static Future<List<Map<String, dynamic>>> getAttendanceBySession(
     int sessionId,
   ) async {
-    final dbClient = await db;
-
-    return await dbClient.rawQuery(
-      '''
-      SELECT
-        Students.student_id,
-        Students.student_name,
-        IFNULL(Attendance.status, 'Absent') as status
-      FROM Students
-      LEFT JOIN Attendance
-      ON Students.student_id = Attendance.student_id
-      AND Attendance.session_id = ?
-    ''',
+    final d = await db;
+    return d.rawQuery(
+      """
+      SELECT a.*, s.first_name || ' ' || s.last_name AS full_name
+      FROM Attendance a
+      JOIN Students s ON a.registration_number = s.registration_number
+      WHERE a.session_id = ?
+      ORDER BY s.last_name, s.first_name
+    """,
       [sessionId],
     );
   }
 
-  // =========================
-  // =========================
-  // ✅ TIMETABLE (CORRECT)
-  // =========================
+  static Future<Map<String, int>> getAttendanceCount(int sessionId) async {
+    final d = await db;
+    final res = await d.rawQuery(
+      """
+      SELECT
+        SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) AS present,
+        SUM(CASE WHEN status = 'Absent'  THEN 1 ELSE 0 END) AS absent,
+        SUM(CASE WHEN status = 'Late'    THEN 1 ELSE 0 END) AS late
+      FROM Attendance WHERE session_id = ?
+    """,
+      [sessionId],
+    );
+    if (res.isEmpty) return {"present": 0, "absent": 0, "late": 0};
+    return {
+      "present": (res.first["present"] as int?) ?? 0,
+      "absent": (res.first["absent"] as int?) ?? 0,
+      "late": (res.first["late"] as int?) ?? 0,
+    };
+  }
 
-  static Future<List<Map<String, dynamic>>> getTimetable() async {
-    final dbClient = await db;
+  static Future<List<Map<String, dynamic>>> getAttendanceExportData({
+    int? classId,
+    int? sessionId,
+  }) async {
+    final d = await db;
+    String where = "WHERE 1=1";
+    final args = <dynamic>[];
+    if (classId != null) {
+      where += " AND tt.class_id = ?";
+      args.add(classId);
+    }
+    if (sessionId != null) {
+      where += " AND sess.session_id = ?";
+      args.add(sessionId);
+    }
 
-    return await dbClient.query(
-      "Teacher_Timetable",
-      orderBy: "timetable_id DESC",
+    return d.rawQuery("""
+      SELECT
+        a.registration_number,
+        s.first_name || ' ' || s.last_name AS student_name,
+        cc.class_name,
+        sub.subject_shortname,
+        tt.session_type,
+        sess.session_date,
+        sess.start_time,
+        a.status,
+        a.notes,
+        a.participation_score,
+        a.discipline_score,
+        a.preparation_score
+      FROM Attendance a
+      JOIN Students  s    ON a.registration_number = s.registration_number
+      JOIN Sessions  sess ON a.session_id          = sess.session_id
+      JOIN Teacher_Timetable tt  ON sess.timetable_id = tt.timetable_id
+      JOIN Classes   cc   ON tt.class_id             = cc.class_id
+      JOIN Subjects  sub  ON tt.subject_id            = sub.subject_id
+      $where
+      ORDER BY sess.session_date DESC, s.last_name, s.first_name
+    """, args);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  TIMETABLE
+  // ══════════════════════════════════════════════════════════════════════════
+
+  static Future<List<Map<String, dynamic>>> getWeeklySchedule() async {
+    final d = await db;
+    return d.rawQuery(
+      "SELECT * FROM vw_Weekly_Schedule ORDER BY day_order, start_time",
     );
   }
 
-  static Future<int> insertTimetable({
-    required String subject,
-    required String day,
-    required String start,
-    required String end,
-    required String type,
-  }) async {
-    final dbClient = await db;
+  static Future<List<Map<String, dynamic>>> getTimetableByClass(
+    int classId,
+  ) async {
+    final d = await db;
+    return d.rawQuery(
+      "SELECT * FROM vw_Weekly_Schedule WHERE class_id = ? ORDER BY day_order, start_time",
+      [classId],
+    );
+  }
 
-    return await dbClient.insert("Teacher_Timetable", {
-      "subject_name": subject,
-      "day_of_week": day,
-      "start_time": start,
-      "end_time": end,
-      "session_type": type,
+  static Future<int> insertTimetableSlot({
+    required int classId,
+    required int subjectId,
+    required String dayOfWeek,
+    required String startTime,
+    required String endTime,
+    required String sessionType,
+    String? roomName,
+  }) async {
+    final d = await db;
+
+    // teacher_id مطلوب NOT NULL — نجيب أول معلم في القاعدة
+    final teachers = await d.query("Teachers", limit: 1);
+    if (teachers.isEmpty) throw Exception("No teacher found in database");
+    final teacherId = teachers.first['teacher_id'] as int;
+
+    return d.insert("Teacher_Timetable", {
+      "class_id": classId,
+      "subject_id": subjectId,
+      "teacher_id": teacherId,
+      "day_of_week": dayOfWeek,
+      "start_time": startTime,
+      "end_time": endTime,
+      "session_type": sessionType,
+      "room_name": roomName,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<void> updateTimetableSlot({
+    required int timetableId,
+    required int classId,
+    required int subjectId,
+    required String dayOfWeek,
+    required String startTime,
+    required String endTime,
+    required String sessionType,
+    String? roomName,
+  }) async {
+    final d = await db;
+
+    // teacher_id مطلوب NOT NULL — نجيب أول معلم في القاعدة
+    final teachers = await d.query("Teachers", limit: 1);
+    if (teachers.isEmpty) throw Exception("No teacher found in database");
+    final teacherId = teachers.first['teacher_id'] as int;
+
+    await d.update(
+      "Teacher_Timetable",
+      {
+        "class_id": classId,
+        "subject_id": subjectId,
+        "teacher_id": teacherId,
+        "day_of_week": dayOfWeek,
+        "start_time": startTime,
+        "end_time": endTime,
+        "session_type": sessionType,
+        "room_name": roomName,
+      },
+      where: "timetable_id = ?",
+      whereArgs: [timetableId],
+    );
+  }
+
+  static Future<void> deleteTimetableSlot(int timetableId) async {
+    final d = await db;
+    await d.delete(
+      "Teacher_Timetable",
+      where: "timetable_id = ?",
+      whereArgs: [timetableId],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  SUBJECTS, TEACHERS & ROOMS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  static Future<List<Map<String, dynamic>>> getSubjects() async {
+    final d = await db;
+    return d.query("Subjects", orderBy: "subject_name ASC");
+  }
+
+  static Future<List<Map<String, dynamic>>> getTeachers() async {
+    final d = await db;
+    return d.query("Teachers", orderBy: "full_name ASC");
+  }
+
+  static Future<List<Map<String, dynamic>>> getRooms() async {
+    final d = await db;
+    try {
+      return d.query("Rooms", orderBy: "room_name ASC");
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  IMPORT
+  // ══════════════════════════════════════════════════════════════════════════
+
+  static Future<Map<String, dynamic>> importStudents(
+    List<Map<String, dynamic>> rows,
+    int classId,
+  ) async {
+    final d = await db;
+    int inserted = 0, skipped = 0;
+    final errors = <String>[];
+
+    await d.transaction((txn) async {
+      for (final row in rows) {
+        final reg = (row['registration_number'] ?? '').toString().trim();
+        final fn = (row['first_name'] ?? '').toString().trim();
+        final ln = (row['last_name'] ?? '').toString().trim();
+        if (reg.isEmpty || fn.isEmpty || ln.isEmpty) {
+          errors.add('Skipped: $row');
+          skipped++;
+          continue;
+        }
+        try {
+          final r = await txn.insert("Students", {
+            "registration_number": reg,
+            "first_name": fn,
+            "last_name": ln,
+            "email": row['email'] ?? 'student@univ-msila.dz',
+            "phone": row['phone'],
+            "status": 'active',
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          await txn.insert("Student_Enrollment", {
+            "registration_number": reg,
+            "class_id": classId,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          r > 0 ? inserted++ : skipped++;
+        } catch (e) {
+          errors.add('Error $reg: $e');
+          skipped++;
+        }
+      }
     });
+
+    return {"inserted": inserted, "skipped": skipped, "errors": errors};
   }
 }

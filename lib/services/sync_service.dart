@@ -7,7 +7,7 @@ import 'sheets_export_service.dart';
 class SyncService {
   final BackupService _backupService = BackupService();
   final SheetsExportService _sheetsService = SheetsExportService();
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final DBHelper _dbHelper = DBHelper();
   final Connectivity _connectivity = Connectivity();
 
   bool _isSyncing = false;
@@ -47,7 +47,7 @@ class SyncService {
 
       if (unsyncedRecords.isNotEmpty) {
         // You need a valid spreadsheet ID from Google Sheets
-        const String yourSpreadsheetId =
+        const String spreadsheetId =
             '1Jsyl7CLtTJJJ0VTCtYuVYihhkEKdvdKDIqyz8yQgt4w';
 
         // Convert records to format expected by sheets service
@@ -61,7 +61,7 @@ class SyncService {
         }).toList();
 
         await _sheetsService.exportAttendanceToSheets(
-          yourSpreadsheetId,
+          spreadsheetId,
           attendanceData,
         );
 

@@ -1,0 +1,1017 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../database/db_helper.dart';
+import '../app_colors.dart';
+
+// ═══════════════════════════════════════════════════════════
+//  Model داخلي للطالب
+// ═══════════════════════════════════════════════════════════
+class _StudentRecord {
+  final String registrationNumber;
+  final String fullName;
+  String status;
+  int participationScore;
+  int disciplineScore;
+  int preparationScore;
+  String notes;
+  bool saved;
+
+  _StudentRecord({
+    required this.registrationNumber,
+    required this.fullName,
+    this.status = 'Present',
+    this.participationScore = 0,
+    this.disciplineScore = 0,
+    this.preparationScore = 0,
+    this.notes = '',
+    this.saved = false,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  AttendanceFlowScreen
+// ═══════════════════════════════════════════════════════════
+class AttendanceFlowScreen extends StatefulWidget {
+  final int classId;
+  final String className;
+  final int sessionId;
+
+  const AttendanceFlowScreen({
+    super.key,
+    required this.classId,
+    required this.className,
+    required this.sessionId,
+  });
+
+  @override
+  State<AttendanceFlowScreen> createState() => _AttendanceFlowScreenState();
+}
+
+class _AttendanceFlowScreenState extends State<AttendanceFlowScreen>
+    with SingleTickerProviderStateMixin {
+  List<_StudentRecord> _students = [];
+  int _currentIndex = 0;
+  bool _loading = true;
+  bool _saving = false;
+
+  late final AnimationController _animController;
+  late final Animation<double> _fadeAnim;
+  final _notesController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    _fadeAnim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeInOut,
+    );
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final rawStudents = await DBHelper.getStudentsByClass(widget.classId);
+      final existing = await DBHelper.getAttendanceForSession(widget.sessionId);
+
+      _students = rawStudents.map((s) {
+        final reg = s['registration_number'] as String;
+        final prev = existing[reg];
+        return _StudentRecord(
+          registrationNumber: reg,
+          fullName: s['full_name'] as String? ?? '',
+          status: prev?['status'] as String? ?? 'Present',
+          participationScore: (prev?['participation_score'] as int?) ?? 0,
+          disciplineScore: (prev?['discipline_score'] as int?) ?? 0,
+          preparationScore: (prev?['preparation_score'] as int?) ?? 0,
+          notes: prev?['notes'] as String? ?? '',
+          saved: prev != null,
+        );
+      }).toList();
+
+      _currentIndex = _students.indexWhere((s) => !s.saved);
+      if (_currentIndex == -1) _currentIndex = _students.length - 1;
+
+      _syncNotes();
+      setState(() => _loading = false);
+      _animController.forward(from: 0);
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
+
+  void _syncNotes() => _notesController.text = _current.notes;
+  _StudentRecord get _current => _students[_currentIndex];
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+  Future<void> _goTo(int index) async {
+    await _saveCurrent();
+    await _animController.reverse();
+    setState(() {
+      _currentIndex = index;
+      _syncNotes();
+    });
+    await _animController.forward(from: 0);
+  }
+
+  Future<void> _next() async {
+    if (_currentIndex < _students.length - 1) await _goTo(_currentIndex + 1);
+  }
+
+  Future<void> _prev() async {
+    if (_currentIndex > 0) await _goTo(_currentIndex - 1);
+  }
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+  Future<void> _saveCurrent() async {
+    final s = _current;
+    s.notes = _notesController.text;
+    try {
+      await DBHelper.upsertAttendance(
+        sessionId: widget.sessionId,
+        registrationNumber: s.registrationNumber,
+        status: s.status,
+        notes: s.notes,
+        participationScore: s.participationScore,
+        disciplineScore: s.disciplineScore,
+        preparationScore: s.preparationScore,
+      );
+      setState(() => s.saved = true);
+    } catch (_) {}
+  }
+
+  Future<void> _finishSession() async {
+    setState(() => _saving = true);
+    await _saveCurrent();
+    await DBHelper.batchUpsertAttendance(
+      widget.sessionId,
+      _students
+          .map(
+            (s) => {
+              'registration_number': s.registrationNumber,
+              'status': s.status,
+              'notes': s.notes,
+              'participation_score': s.participationScore,
+              'discipline_score': s.disciplineScore,
+              'preparation_score': s.preparationScore,
+            },
+          )
+          .toList(),
+    );
+    await DBHelper.updateSessionStatus(widget.sessionId, 'Completed');
+    if (mounted) {
+      setState(() => _saving = false);
+      Navigator.pop(context);
+    }
+  }
+
+  // ── Color helpers ─────────────────────────────────────────────────────────
+  Color _statusColor(String s) {
+    switch (s) {
+      case 'Present':
+        return AppColors.success;
+      case 'Absent':
+        return AppColors.danger;
+      case 'Late':
+        return AppColors.warning;
+      case 'Excused':
+        return const Color(0xFF7C3AED);
+      default:
+        return AppColors.textMuted;
+    }
+  }
+
+  Color _statusBg(String s) {
+    switch (s) {
+      case 'Present':
+        return AppColors.successBg;
+      case 'Absent':
+        return AppColors.dangerBg;
+      case 'Late':
+        return AppColors.warningBg;
+      case 'Excused':
+        return const Color(0xFFEDE9FE);
+      default:
+        return AppColors.divider;
+    }
+  }
+
+  IconData _statusIcon(String s) {
+    switch (s) {
+      case 'Present':
+        return Icons.check_circle;
+      case 'Absent':
+        return Icons.cancel;
+      case 'Late':
+        return Icons.watch_later;
+      case 'Excused':
+        return Icons.info;
+      default:
+        return Icons.circle_outlined;
+    }
+  }
+
+  // ── قائمة الطلبة — Bottom Sheet ───────────────────────────────────────────
+  void _showStudentList() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (_, scrollController) => Column(
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Row(
+                children: [
+                  Text(
+                    'All Students',
+                    style: GoogleFonts.lexend(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textMain,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const Spacer(),
+                  // إحصاء سريع
+                  _miniStat(
+                    Icons.check_circle,
+                    AppColors.success,
+                    '${_students.where((s) => s.status == 'Present').length}',
+                  ),
+                  const SizedBox(width: 8),
+                  _miniStat(
+                    Icons.cancel,
+                    AppColors.danger,
+                    '${_students.where((s) => s.status == 'Absent').length}',
+                  ),
+                  const SizedBox(width: 8),
+                  _miniStat(
+                    Icons.watch_later,
+                    AppColors.warning,
+                    '${_students.where((s) => s.status == 'Late').length}',
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // القائمة
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                itemCount: _students.length,
+                itemBuilder: (_, i) {
+                  final s = _students[i];
+                  final isCurrent = i == _currentIndex;
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context); // أغلق الـ sheet
+                      _goTo(i); // انتقل للطالب
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isCurrent ? AppColors.primaryBg : AppColors.bg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isCurrent
+                              ? AppColors.primary.withOpacity(0.5)
+                              : AppColors.border,
+                          width: isCurrent ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // رقم الطالب في القائمة
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: isCurrent
+                                  ? AppColors.primary
+                                  : AppColors.divider,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${i + 1}',
+                                style: GoogleFonts.lexend(
+                                  color: isCurrent
+                                      ? Colors.white
+                                      : AppColors.textMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // اسم الطالب
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  s.fullName,
+                                  style: GoogleFonts.lexend(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textMain,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                Text(
+                                  s.registrationNumber,
+                                  style: GoogleFonts.lexend(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // حالة الطالب
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _statusBg(s.status),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _statusIcon(s.status),
+                                  size: 12,
+                                  color: _statusColor(s.status),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  s.status,
+                                  style: GoogleFonts.lexend(
+                                    color: _statusColor(s.status),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // مؤشر "غير محفوظ بعد"
+                          if (!s.saved) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.warning,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _miniStat(IconData icon, Color color, String count) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 14, color: color),
+      const SizedBox(width: 3),
+      Text(
+        count,
+        style: GoogleFonts.lexend(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    ],
+  );
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: AppColors.bg,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+    if (_students.isEmpty) {
+      return Scaffold(
+        backgroundColor: AppColors.bg,
+        appBar: _appBar(),
+        body: Center(
+          child: Text(
+            'No students enrolled in this class.',
+            style: GoogleFonts.lexend(color: AppColors.textMuted),
+          ),
+        ),
+      );
+    }
+
+    final total = _students.length;
+    final done = _students.where((s) => s.saved).length;
+    final progress = total > 0 ? done / total : 0.0;
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: _appBar(),
+      body: Column(
+        children: [
+          _progressHeader(done, total, progress),
+          Expanded(
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Column(
+                  children: [
+                    _studentCard(),
+                    const SizedBox(height: 16),
+                    _statusPicker(),
+                    const SizedBox(height: 16),
+                    if (_current.status == 'Present') ...[
+                      _scoresSection(),
+                      const SizedBox(height: 16),
+                    ],
+                    _notesField(),
+                    const SizedBox(height: 16),
+                    // ✅ زر قائمة الطلبة
+                    _studentListButton(),
+                    const SizedBox(height: 16),
+                    _navRow(total),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  AppBar _appBar() => AppBar(
+    backgroundColor: AppColors.bg,
+    elevation: 0,
+    leading: IconButton(
+      icon: const Icon(Icons.arrow_back, color: AppColors.textMain),
+      onPressed: () async {
+        await _saveCurrent();
+        if (mounted) Navigator.pop(context);
+      },
+    ),
+    title: Text(
+      widget.className,
+      style: GoogleFonts.lexend(
+        color: AppColors.textMain,
+        fontWeight: FontWeight.bold,
+        fontSize: 18,
+      ),
+    ),
+    actions: [
+      // ✅ أيقونة فتح قائمة الطلبة في AppBar
+      IconButton(
+        onPressed: _showStudentList,
+        icon: Stack(
+          children: [
+            const Icon(Icons.people_outline, color: AppColors.textSub),
+            if (_students.where((s) => !s.saved).isNotEmpty)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AppColors.warning,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        tooltip: 'Student list',
+      ),
+      if (_saving)
+        const Padding(
+          padding: EdgeInsets.all(14),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.primary,
+            ),
+          ),
+        )
+      else
+        TextButton(
+          onPressed: _finishSession,
+          child: Text(
+            'Finish',
+            style: GoogleFonts.lexend(
+              color: AppColors.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+    ],
+  );
+
+  // ── Progress Header ───────────────────────────────────────────────────────
+  Widget _progressHeader(int done, int total, double progress) => Container(
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+    color: AppColors.bg,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Student ${_currentIndex + 1} of $total',
+              style: GoogleFonts.lexend(
+                color: AppColors.textSub,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '$done recorded',
+              style: GoogleFonts.lexend(
+                color: AppColors.textMuted,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 6,
+            backgroundColor: AppColors.border,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              progress == 1.0 ? AppColors.success : AppColors.primary,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  // ── Student Card ──────────────────────────────────────────────────────────
+  Widget _studentCard() {
+    final s = _current;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _statusColor(s.status).withOpacity(0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _statusColor(s.status).withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: _statusBg(s.status),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                s.fullName.isNotEmpty ? s.fullName[0].toUpperCase() : '?',
+                style: GoogleFonts.lexend(
+                  color: _statusColor(s.status),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 26,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            s.fullName,
+            style: GoogleFonts.lexend(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textMain,
+              fontSize: 18,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            s.registrationNumber,
+            style: GoogleFonts.lexend(color: AppColors.textMuted, fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: _statusBg(s.status),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _statusIcon(s.status),
+                  color: _statusColor(s.status),
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  s.status,
+                  style: GoogleFonts.lexend(
+                    color: _statusColor(s.status),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Status Picker ─────────────────────────────────────────────────────────
+  Widget _statusPicker() {
+    const statuses = ['Present', 'Absent', 'Late', 'Excused'];
+    return Row(
+      children: statuses.map((st) {
+        final selected = _current.status == st;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () async {
+              HapticFeedback.lightImpact();
+              setState(() => _current.status = st);
+              await _saveCurrent();
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: selected ? _statusColor(st) : AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selected ? _statusColor(st) : AppColors.border,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    _statusIcon(st),
+                    color: selected ? Colors.white : _statusColor(st),
+                    size: 20,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    st,
+                    style: GoogleFonts.lexend(
+                      color: selected ? Colors.white : AppColors.textSub,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // ── Scores ────────────────────────────────────────────────────────────────
+  Widget _scoresSection() => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Evaluation  (0 – 10)',
+          style: GoogleFonts.lexend(
+            fontWeight: FontWeight.bold,
+            color: AppColors.textMain,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 14),
+        _scoreRow(
+          'Participation',
+          Icons.record_voice_over_outlined,
+          _current.participationScore,
+          (v) => setState(() => _current.participationScore = v),
+        ),
+        const SizedBox(height: 10),
+        _scoreRow(
+          'Discipline',
+          Icons.shield_outlined,
+          _current.disciplineScore,
+          (v) => setState(() => _current.disciplineScore = v),
+        ),
+        const SizedBox(height: 10),
+        _scoreRow(
+          'Preparation',
+          Icons.book_outlined,
+          _current.preparationScore,
+          (v) => setState(() => _current.preparationScore = v),
+        ),
+      ],
+    ),
+  );
+
+  Widget _scoreRow(
+    String label,
+    IconData icon,
+    int value,
+    ValueChanged<int> onChange,
+  ) => Row(
+    children: [
+      Icon(icon, size: 16, color: AppColors.textMuted),
+      const SizedBox(width: 8),
+      SizedBox(
+        width: 96,
+        child: Text(
+          label,
+          style: GoogleFonts.lexend(color: AppColors.textSub, fontSize: 12),
+        ),
+      ),
+      Expanded(
+        child: Row(
+          children: List.generate(11, (i) {
+            final sel = i == value;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onChange(i);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: sel ? AppColors.primary : AppColors.divider,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '$i',
+                      style: GoogleFonts.lexend(
+                        color: sel ? Colors.white : AppColors.textMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    ],
+  );
+
+  // ── Notes ─────────────────────────────────────────────────────────────────
+  Widget _notesField() => Container(
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: TextField(
+      controller: _notesController,
+      maxLines: 2,
+      style: GoogleFonts.lexend(color: AppColors.textMain, fontSize: 13),
+      decoration: InputDecoration(
+        hintText: 'Add a note (optional)...',
+        hintStyle: GoogleFonts.lexend(color: AppColors.textMuted, fontSize: 13),
+        prefixIcon: const Icon(
+          Icons.notes_outlined,
+          size: 18,
+          color: AppColors.textMuted,
+        ),
+        border: InputBorder.none,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+      ),
+      onChanged: (v) => _current.notes = v,
+    ),
+  );
+
+  // ── زر قائمة الطلبة ───────────────────────────────────────────────────────
+  Widget _studentListButton() {
+    final total = _students.length;
+    final done = _students.where((s) => s.saved).length;
+    final notSaved = total - done;
+
+    return GestureDetector(
+      onTap: _showStudentList,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.people_outline,
+                color: AppColors.primary,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Student List',
+                    style: GoogleFonts.lexend(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textMain,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    notSaved > 0
+                        ? '$done / $total recorded  ·  $notSaved pending'
+                        : 'All $total students recorded',
+                    style: GoogleFonts.lexend(
+                      color: notSaved > 0
+                          ? AppColors.warning
+                          : AppColors.success,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textMuted,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Navigation Row ────────────────────────────────────────────────────────
+  Widget _navRow(int total) {
+    final isFirst = _currentIndex == 0;
+    final isLast = _currentIndex == total - 1;
+
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: isFirst ? null : _prev,
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: isFirst ? AppColors.divider : AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.arrow_back,
+                    size: 18,
+                    color: isFirst ? AppColors.textMuted : AppColors.textSub,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Previous',
+                    style: GoogleFonts.lexend(
+                      color: isFirst ? AppColors.textMuted : AppColors.textSub,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: GestureDetector(
+            onTap: isLast ? _finishSession : _next,
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: isLast ? AppColors.success : AppColors.primary,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    isLast ? 'Finish' : 'Next',
+                    style: GoogleFonts.lexend(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    isLast ? Icons.check : Icons.arrow_forward,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
